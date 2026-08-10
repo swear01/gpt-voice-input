@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import org.gptvoiceinput.R
 import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.config.AppConfig
+import org.gptvoiceinput.config.ImportedProfileStore
 import org.gptvoiceinput.config.SettingsStore
 import org.gptvoiceinput.net.OpenAITranscriber
 import org.gptvoiceinput.net.TranscriptionException
@@ -43,6 +44,7 @@ class RecognitionActivity : AppCompatActivity() {
 
     private lateinit var secureStore: SecureApiKeyStore
     private lateinit var settingsStore: SettingsStore
+    private lateinit var importedProfileStore: ImportedProfileStore
 
     private lateinit var rootView: FrameLayout
     private lateinit var gearButton: ImageButton
@@ -82,6 +84,7 @@ class RecognitionActivity : AppCompatActivity() {
 
         secureStore = SecureApiKeyStore(this)
         settingsStore = SettingsStore(this)
+        importedProfileStore = ImportedProfileStore(this)
 
         rootView = findViewById(R.id.root)
         gearButton = findViewById(R.id.gear_button)
@@ -249,7 +252,11 @@ class RecognitionActivity : AppCompatActivity() {
 
         transcribeJob = lifecycleScope.launch {
             try {
-                val profile = AppConfig.load(this@RecognitionActivity, settingsStore.customTerms())
+                val profile = AppConfig.load(
+                    this@RecognitionActivity,
+                    importedProfileStore.load(),
+                    settingsStore.customTerms(),
+                )
                 val transcriber = OpenAITranscriber(key)
                 val transcript = transcriber.transcribe(tempWav, profile)
                 deliverResult(transcript)

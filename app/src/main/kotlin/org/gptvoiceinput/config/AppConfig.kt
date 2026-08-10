@@ -13,7 +13,9 @@ import org.json.JSONObject
  *  1. `config/default.json`   — generic public defaults, always shipped
  *  2. `config/local.json`     — deployment overlay, gitignored, shipped when
  *                                present (personal profile for forks/deployers)
- *  3. runtime custom terms    — user-entered in Settings → Advanced, merged
+ *  3. runtime imported profile — imported via Settings → Advanced → Import
+ *                                (persisted by ImportedProfileStore, non-secret)
+ *  4. runtime custom terms    — user-entered in Settings → Advanced, merged
  *                                into keywords (never overrides them)
  *
  * No API keys ever live here; keys are runtime-entered and stored by
@@ -32,17 +34,26 @@ data class TranscriptionProfile(
             Regex("[a-z]{2,3}(-[A-Za-z]{2,4})?", RegexOption.IGNORE_CASE)
 
         /**
-         * Merge an optional overlay over a base JSON document, then fold in
-         * runtime custom terms. Pure function so it is unit-testable without
-         * an Android Context.
+         * Merge optional overlays over a base JSON document, then fold in the
+         * runtime imported profile and custom terms. Pure function so it is
+         * unit-testable without an Android Context.
+         *
+         * Semantics (explicit, per spec):
+         * - expectedLanguages: imported overrides when non-empty, else
+         *   deployment/default
+         * - transcriptionContext: imported overrides when non-blank, else
+         *   deployment/default
+         * - keywords: union (dedup, order-preserving) of deployment + imported
+         *   + custom terms
          */
         fun merge(
             base: JSONObject,
             overlay: JSONObject?,
+            imported: TranscriptionProfile?,
             customTerms: List<String>,
         ): TranscriptionProfile {
+            // 1. default + deployment overlay (JSON level)
             val merged = JSONObject(base.toString())
-
             overlay?.let { o ->
                 o.keys().forEach { key ->
                     when {
@@ -60,28 +71,28 @@ data class TranscriptionProfile(
                 }
             }
 
-            val languages = merged
+            // 2. values from default/deployment
+            val deploymentLanguages = merged
                 .optJSONArray("expectedLanguages")
                 ?.let { arr -> List(arr.length()) { arr.getString(it) } }
                 .orEmpty()
                 .filter { VALID_LANGUAGE.matches(it) }
+            val deploymentContext = merged.optString("transcriptionContext").trim()
 
-            val context = merged.optString("transcriptionContext").trim()
+            // 3. imported layer overrides when provided
+            val languages =
+                imported?.expectedLanguages?.takeIf { it.isNotEmpty() } ?: deploymentLanguages
+            val context =
+                imported?.transcriptionContext?.takeIf { it.isNotBlank() } ?: deploymentContext
 
+            // 4. keywords: deployment + imported + custom terms, unioned
             val keywords = buildList {
                 merged.optJSONArray("keywords")?.let { arr ->
-                    for (i in 0 until arr.length()) {
-                        add(sanitizeKeyword(arr.getString(i)))
-                    }
+                    for (i in 0 until arr.length()) add(sanitizeKeyword(arr.getString(i)))
                 }
+                imported?.keywords?.forEach { add(sanitizeKeyword(it)) }
                 customTerms.forEach { add(sanitizeKeyword(it)) }
             }.distinct().filter { it.isNotEmpty() }
-
-            if (languages != (merged.optJSONArray("expectedLanguages")?.let { arr ->
-                    List(arr.length()) { arr.getString(it) }
-                })) {
-                Log.w(TAG, "Some expectedLanguages were dropped (unsupported format)")
-            }
 
             return TranscriptionProfile(languages, context, keywords)
         }
@@ -92,8 +103,6 @@ data class TranscriptionProfile(
          */
         private fun sanitizeKeyword(raw: String): String =
             raw.replace(Regex("[<>\\r\\n]+"), " ").trim()
-
-        private const val TAG = "AppConfig"
     }
 }
 
@@ -102,15 +111,19 @@ object AppConfig {
     private const val ASSET_LOCAL = "local.json"
     private const val TAG = "AppConfig"
 
-    /** Loads the effective profile for a given runtime custom-terms list. */
-    fun load(context: Context, customTerms: List<String>): TranscriptionProfile {
+    /** Loads the effective profile for the given imported profile and custom terms. */
+    fun load(
+        context: Context,
+        imported: TranscriptionProfile?,
+        customTerms: List<String>,
+    ): TranscriptionProfile {
         val defaultJson = readAsset(context, ASSET_DEFAULT) ?: run {
             // The asset is always shipped; fail loudly rather than silently
             // transcribing with an empty profile.
             throw IllegalStateException("Missing required asset: $ASSET_DEFAULT")
         }
         val localJson = readAsset(context, ASSET_LOCAL)
-        return TranscriptionProfile.merge(defaultJson, localJson, customTerms)
+        return TranscriptionProfile.merge(defaultJson, localJson, imported, customTerms)
     }
 
     private fun readAsset(context: Context, name: String): JSONObject? =
