@@ -19,11 +19,15 @@
 
         <TextView
             style="@style/SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:text="@string/section_openai" />
 
         <TextView
             style="@style/FieldLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:text="@string/api_key_label" />
 
         <EditText
@@ -43,11 +47,15 @@
 
         <TextView
             style="@style/SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:text="@string/section_recording" />
 
         <TextView
             style="@style/FieldLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:text="@string/auto_stop_label" />
 
         <SeekBar
@@ -67,6 +75,8 @@
         <TextView
             android:id="@+id/advanced_header"
             style="@style/SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:clickable="true"
             android:focusable="true"
@@ -81,6 +91,8 @@
 
             <TextView
                 style="@style/FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="@string/custom_terms_label" />
 
             <EditText
@@ -94,6 +106,8 @@
 
             <TextView
                 style="@style/FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/effective_config_label" />
 
@@ -104,6 +118,42 @@
                 android:fontFamily="monospace"
                 android:textIsSelectable="true"
                 android:textSize="12sp" />
+
+            <TextView
+                style="@style/SectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/section_profile" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/import_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/import_settings" />
+
+                <Button
+                    android:id="@+id/export_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/export_settings" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/backup_excludes_api_key" />
         </LinearLayout>
 
     </LinearLayout>

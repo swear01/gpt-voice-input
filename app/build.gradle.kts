@@ -107,7 +107,11 @@ android {
     }
 
     testOptions {
-        unitTests.isReturnDefaultValues = true
+        unitTests {
+            isReturnDefaultValues = true
+            // Required for Robolectric to inflate real layouts/resources.
+            isIncludeAndroidResources = true
+        }
     }
 }
 
@@ -121,4 +125,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

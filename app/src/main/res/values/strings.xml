@@ -35,6 +35,20 @@
     <string name="effective_config_label">Effective configuration</string>
     <string name="effective_languages">Languages: %1$s</string>
     <string name="effective_keywords">Keywords: %1$s</string>
+    <string name="section_profile">Profile &amp; settings</string>
+    <string name="import_settings">Import settings</string>
+    <string name="export_settings">Export settings</string>
+    <string name="backup_excludes_api_key">API keys are intentionally excluded from backups.</string>
+    <string name="settings_imported">Settings imported</string>
+    <string name="settings_exported">Settings exported</string>
+    <string name="settings_export_failed">Export failed: %1$s</string>
+    <string name="settings_import_failed">Import failed: %1$s</string>
+    <string name="import_confirm_title">Import settings?</string>
+    <string name="import_confirm_languages">Languages: %1$s</string>
+    <string name="import_confirm_keywords">Keywords: %1$d</string>
+    <string name="import_confirm_auto_stop">Auto-stop: %1$s</string>
+    <string name="import_confirm_custom_terms">Custom terms: %1$d</string>
+    <string name="import_confirm_button">Import</string>
     <string name="save">Save</string>
     <string name="saved">Saved</string>
 </resources>
