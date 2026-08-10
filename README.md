@@ -31,17 +31,45 @@ press SwiftKey mic → speak → tap or auto-stop → GPT Transcribe → text ap
 - Microsoft SwiftKey with **Multimodal Voice Typing disabled**
 - An OpenAI API key (`gpt-transcribe` is billed per audio input)
 
-## SwiftKey setup
+## Installation (Obtainium)
 
-1. Install the APK and open it once from Settings → Apps to grant the
-   microphone permission and enter your API key (or use the gear button on the
-   recognition panel).
+Normal installs and updates go through **Obtainium** — no ADB, no manual APK
+downloads.
+
+```text
+Obtainium
+→ Add App
+→ https://github.com/swear01/gpt-voice-input
+→ Install
+```
+
+Obtainium watches the GitHub Releases of this repository and offers updates
+when a new version is published. Because every release is signed with the same
+long-lived certificate, updates install **over** the previous version and your
+settings survive.
+
+> Manual APK downloads are only for troubleshooting — see
+> [Advanced / manual installation](#advanced--manual-installation-troubleshooting).
+
+## First-time setup
+
+GPT Voice Input intentionally has **no launcher entry** — it behaves like a
+small system component, so you will not find it in the app drawer. Setup
+happens through SwiftKey:
+
+1. Install with Obtainium (above).
 2. In SwiftKey: **Settings → Voice typing** — disable SwiftKey's own Multimodal
    Voice Typing so SwiftKey routes mic presses to the system speech recognizer.
-3. Tap SwiftKey's microphone button. GPT Voice Input should start recording.
-   Tap the panel to submit, or wait for auto-stop.
+3. Open any text field.
+4. Tap SwiftKey's microphone button. Android launches GPT Voice Input.
+5. If no API key is configured yet, GPT Voice Input shows the no-key state.
+6. Tap **Open Settings** (or the ⚙ gear in the panel).
+7. Enter your OpenAI API key.
+8. Save and go back.
+9. Dictate. Tap the panel to submit, or wait for auto-stop.
 
-If SwiftKey shows a chooser, pick GPT Voice Input and "Always".
+If Android shows a speech-recognizer chooser (some devices/SwiftKey builds do),
+select **GPT Voice Input** and choose *Always* if the OS offers that option.
 
 ## How it works
 
@@ -70,21 +98,35 @@ raw PCM
 
 ## Configuration profiles
 
-`config/default.json` ships inside the APK with neutral, generic defaults
-(Traditional Chinese/English code switching, neutral context, no keywords).
+Transcription configuration is layered, each layer overriding the previous:
 
-Deployments can overlay a personal profile:
-
-```bash
-cp config/personal.example.json config/local.json   # gitignored
+```text
+1. config/default.json        generic public defaults (always shipped)
+2. config/local.json          deployment overlay (embedded at build time, optional)
+3. imported profile           Settings → Advanced → Import (runtime, on-device)
+4. custom terms               Settings → Advanced → Custom terms (runtime)
+        ↓
+   effective TranscriptionProfile sent to gpt-transcribe
 ```
 
-`config/local.json` replaces matching keys (context, languages) and unions
-`keywords`. **API keys never live in config** — they are entered at runtime in
-Settings and stored encrypted in the Android Keystore.
+- `config/default.json` ships inside the APK with neutral, generic defaults
+  (Traditional Chinese/English code switching, neutral context, no keywords).
+- Deployments can overlay a personal profile at **build time**:
+  `cp config/personal.example.json config/local.json` (gitignored). CI injects
+  it via the `GVI_DEPLOYMENT_CONFIG_BASE64` secret instead of committing it.
+- A runtime **imported profile** (Settings → Advanced → Import) overrides
+  languages/context and merges keywords — useful to move a setup between
+  devices or to apply a fork's profile.
 
-Users can add custom terms at runtime under **Settings → Advanced → Custom
-terms** (one per line); they merge with the deployment keywords.
+**API keys never live in config** — they are entered at runtime in Settings and
+stored encrypted in the Android Keystore.
+
+### Settings import / export
+
+Under **Settings → Advanced → Profile & settings** you can back up and restore
+the non-secret configuration: expected languages, transcription context,
+profile keywords, auto-stop, and custom terms. The file is `schemaVersion: 1`
+JSON. **API keys are intentionally excluded from backups.**
 
 ### Keyword philosophy
 
@@ -121,18 +163,44 @@ unsigned (for local verification only — unsigned APKs won't install).
    `keyPassword`.
 3. `./gradlew :app:assembleRelease`
 
-**CI:** the workflow in `.github/workflows/release.yml` reads
-`GVI_KEYSTORE_BASE64`, `GVI_STORE_PASSWORD`, `GVI_KEY_ALIAS`,
-`GVI_KEY_PASSWORD` from GitHub secrets, builds, verifies the signature with
-`apksigner`, and attaches `gpt-voice-input-v<tag>.apk` to a GitHub Release.
+**CI:** the workflow in `.github/workflows/release.yml` reads the signing
+secrets (`GVI_KEYSTORE_BASE64`, `GVI_STORE_PASSWORD`, `GVI_KEY_ALIAS`,
+`GVI_KEY_PASSWORD`), optionally injects the deployment profile from
+`GVI_DEPLOYMENT_CONFIG_BASE64`, runs unit tests + Android lint, builds,
+verifies the signature with `apksigner`, and attaches
+`gpt-voice-input-v<tag>.apk` to a GitHub Release.
 
 Keystores and passwords are **never** committed.
 
-## Distribution (Obtainium)
+## Distribution
 
-Pushing a tag `v0.1.0` triggers the release workflow. The APK asset name is
-predictable (`gpt-voice-input-v0.1.0.apk`), so Obtainium can track new
-versions from the GitHub Releases page. Normal installs/updates need no ADB.
+```text
+Developer:                          User:
+git tag vX.Y.Z                    Obtainium watches this repository
+        ↓                                ↓
+GitHub Actions (tests + lint)     detects a new GitHub Release
+        ↓                                ↓
+Signed APK                        Update (installs over the old version)
+        ↓                                ↓
+GitHub Release                    settings & data survive (same certificate)
+```
+
+Pushing a tag (e.g. `v0.1.1`) triggers the release workflow. The APK asset
+name is predictable (`gpt-voice-input-v0.1.1.apk`) so Obtainium can track new
+versions. The signing certificate never changes, so seamless updates work
+without uninstalling.
+
+### Advanced / manual installation (troubleshooting)
+
+Only for troubleshooting — the normal path is Obtainium:
+
+1. Open the [Releases](https://github.com/swear01/gpt-voice-input/releases) page
+   on the device.
+2. Download the `gpt-voice-input-vX.Y.Z.apk` asset and open it.
+3. Allow "install unknown apps" for the browser/file manager.
+
+Manual installs use the same certificate as Obtainium installs; you can switch
+between the two freely without losing data.
 
 ## Repository layout
 
@@ -145,8 +213,10 @@ app/src/main/kotlin/org/gptvoiceinput/
 ├── audio/EndpointDetector.kt      WAITING_FOR_SPEECH → IN_SPEECH → ENDPOINT_CANDIDATE
 ├── audio/WavWriter.kt             44-byte RIFF writer (little-endian)
 ├── net/OpenAITranscriber.kt       gpt-transcribe multipart client (OkHttp)
-├── config/AppConfig.kt            default.json + local.json overlay merge
+├── config/AppConfig.kt            default → deployment → imported → custom terms
 ├── config/SettingsStore.kt        auto-stop, custom terms
+├── config/ImportedProfileStore.kt runtime imported profile (non-secret)
+├── config/SettingsBackup.kt       schemaVersion-1 import/export + validation
 └── security/SecureApiKeyStore.kt  Android Keystore AES/GCM key storage
 config/
 ├── default.json                   neutral public defaults (shipped)
@@ -171,7 +241,7 @@ context + keywords).
 
 ## Prior art
 
-[Dictate Keyboard](https://github.com/danemadsen/DictateKeyboard) demonstrated
+[Dictate Keyboard](https://github.com/DevEmperor/DictateKeyboard) demonstrated
 a practical system-wide Android voice-input integration and informed parts of
 this project's interaction design. This is an independent implementation using
 only Android and OpenAI public APIs; no Dictate source is copied or vendored,

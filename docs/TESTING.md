@@ -65,3 +65,40 @@ Score each line as correct / partially wrong / wrong, noting the exact error.
 11. Microphone permission denied: guidance screen; nothing inserted.
 12. Raw audio: uploaded WAV must NOT pass through the VAD/noise path (verified
     by architecture: separate analysis copy; no AudioEffect attached).
+
+## Regression checklist (bugs found on real hardware — v0.1.1)
+
+### Settings
+
+- [ ] gear button opens Settings without crash
+- [ ] no-key "Open Settings" opens Settings without crash
+- [ ] Back returns cleanly (no duplicate Activity, no invisible recording)
+- [ ] saved API-key state remains set after reopening Settings
+- [ ] existing custom terms reload after reopening Settings
+- [ ] auto-stop slider position reloads correctly
+- [ ] opening Settings while LISTENING cancels the session (no mic leak)
+
+### Import/export
+
+- [ ] export produces valid `schemaVersion: 1` JSON
+- [ ] API key is absent from the export file
+- [ ] import round-trip reproduces the same effective configuration
+- [ ] malformed JSON produces a clear error and changes nothing
+- [ ] unsupported (newer) schema version produces a clear error
+- [ ] imported profile affects the transcription configuration
+- [ ] importing does not erase the stored API key
+- [ ] import confirmation dialog summarizes before applying
+
+### Deployment profile
+
+- [ ] release APK built by this repo contains the intended deployment profile
+      (verify: `unzip -l … | grep assets/local.json`)
+- [ ] a build without `GVI_DEPLOYMENT_CONFIG_BASE64` falls back to the generic
+      default (no `assets/local.json` in the APK)
+
+### Distribution
+
+- [ ] Obtainium detects v0.1.1
+- [ ] v0.1.1 installs over v0.1.0 without a signature mismatch (same package,
+      higher versionCode, same signing certificate)
+- [ ] settings/app data survive the update
