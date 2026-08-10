@@ -6,12 +6,33 @@
         <item name="colorAccent">@color/accent</item>
     </style>
 
-    <!-- Dark, bare panel for the recognition UI. -->
+    <!--
+        Recognition window: translucent full-window Activity whose only
+        opaque content is the bottom-anchored panel, so the calling app
+        remains visible above it (keyboard-region replacement). No dimming.
+    -->
     <style name="Theme.GptVoiceInput.Recognition" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowBackground">@color/recognition_bg</item>
-        <item name="android:statusBarColor">@color/recognition_bg</item>
-        <item name="android:navigationBarColor">@color/recognition_bg</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowAnimationStyle">@style/RecognitionWindowAnimation</item>
+    </style>
+
+    <style name="RecognitionWindowAnimation">
+        <item name="android:windowEnterAnimation">@anim/panel_slide_up</item>
+        <item name="android:windowExitAnimation">@anim/panel_slide_down</item>
+    </style>
+
+    <style name="Theme.GptVoiceInput.Settings" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="SectionHeader" parent="TextAppearance.AppCompat.Title">

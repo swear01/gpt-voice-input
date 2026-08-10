@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.content.res.Configuration
 import android.speech.RecognizerIntent
 import android.view.View
 import android.widget.Button
@@ -15,6 +16,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -47,6 +50,7 @@ class RecognitionActivity : AppCompatActivity() {
     private lateinit var importedProfileStore: ImportedProfileStore
 
     private lateinit var rootView: FrameLayout
+    private lateinit var panelView: View
     private lateinit var gearButton: ImageButton
     private lateinit var micIcon: View
     private lateinit var processingBar: ProgressBar
@@ -88,6 +92,7 @@ class RecognitionActivity : AppCompatActivity() {
         importedProfileStore = ImportedProfileStore(this)
 
         rootView = findViewById(R.id.root)
+        panelView = findViewById(R.id.panel)
         gearButton = findViewById(R.id.gear_button)
         micIcon = findViewById(R.id.mic_icon)
         processingBar = findViewById(R.id.processing_bar)
@@ -99,7 +104,8 @@ class RecognitionActivity : AppCompatActivity() {
         openSettingsErrorButton = findViewById(R.id.open_settings_error_button)
         settingsActionButton = findViewById(R.id.settings_action_button)
 
-        rootView.setOnClickListener {
+        // Tap anywhere on the panel = stop + submit (primary interaction).
+        panelView.setOnClickListener {
             if (phase == Phase.LISTENING) submit()
         }
         gearButton.setOnClickListener { openSettings() }
@@ -115,7 +121,44 @@ class RecognitionActivity : AppCompatActivity() {
         // Secondary safeguard: remove stale recordings from a crashed session.
         tempWav.delete()
 
+        applyPanelMetrics()
         decideNext()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Rotation is handled via configChanges; re-fit the panel height so a
+        // landscape/split-screen window still shows a keyboard-like panel.
+        applyPanelHeight()
+    }
+
+    /**
+     * Keyboard-height, bottom-anchored panel. Height is a bounded fraction of
+     * the window height (screenHeightDp reflects multi-window bounds), and the
+     * gesture/navigation-bar inset becomes padding inside the panel.
+     */
+    private fun applyPanelMetrics() {
+        applyPanelHeight()
+        ViewCompat.setOnApplyWindowInsetsListener(panelView) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(
+                v.paddingLeft,
+                v.paddingTop,
+                v.paddingRight,
+                bars.bottom,
+            )
+            insets
+        }
+    }
+
+    private fun applyPanelHeight() {
+        val heightDp = resources.configuration.screenHeightDp
+        val panelDp = (heightDp * PANEL_HEIGHT_FRACTION)
+            .toInt()
+            .coerceIn(PANEL_HEIGHT_MIN_DP, PANEL_HEIGHT_MAX_DP)
+        val lp = panelView.layoutParams
+        lp.height = (panelDp * resources.displayMetrics.density).toInt()
+        panelView.layoutParams = lp
     }
 
     override fun onResume() {
@@ -398,5 +441,10 @@ class RecognitionActivity : AppCompatActivity() {
         private const val TAG = "RecognitionActivity"
         private const val TEMP_RECORDING_NAME = "current_recording.wav"
         private const val REQUEST_MIC_PERMISSION = 1001
+
+        /** Panel ≈ 38% of window height, bounded to keyboard-like 180–340dp. */
+        private const val PANEL_HEIGHT_FRACTION = 0.38f
+        private const val PANEL_HEIGHT_MIN_DP = 180
+        private const val PANEL_HEIGHT_MAX_DP = 340
     }
 }
