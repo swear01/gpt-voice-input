@@ -10,15 +10,21 @@ import org.json.JSONObject
  * audio itself.
  *
  * Layer order (later layers win):
- *  1. `config/default.json`   — generic public defaults, always shipped
- *  2. `config/local.json`     — deployment overlay, gitignored, shipped when
- *                                present (personal profile for forks/deployers)
- *  3. runtime imported profile — imported via Settings → Advanced → Import
- *                                (persisted by ImportedProfileStore, non-secret)
- *  4. runtime custom terms    — user-entered in Settings → Advanced, merged
- *                                into keywords (never overrides them)
+ *  1. generic `default.json` asset — neutral public defaults, always shipped
+ *  2. runtime imported profile      — imported via Settings → Advanced →
+ *                                     Profile & backup (ImportedProfileStore,
+ *                                     non-secret, survives APK updates)
+ *  3. runtime custom terms          — Settings → Advanced → Custom terms
  *
- * No API keys ever live here; keys are runtime-entered and stored by
+ * Precedence semantics (explicit, per spec):
+ * - expectedLanguages:     imported replaces the generic value when supplied
+ * - transcriptionContext:  imported replaces the generic value when supplied
+ * - keywords:              imported keywords REPLACE the generic keyword list;
+ *                          runtime custom terms are merged after and
+ *                          deduplicated. No automatic merge of old build-time
+ *                          personal keywords.
+ *
+ * No API keys ever live here; keys are runtime-entered/imported and stored by
  * [org.gptvoiceinput.security.SecureApiKeyStore].
  */
 data class TranscriptionProfile(
@@ -27,70 +33,36 @@ data class TranscriptionProfile(
     val keywords: List<String>,
 ) {
     companion object {
-        /** Keys whose arrays are unioned instead of replaced by overlays. */
-        private val UNION_ARRAY_KEYS = setOf("keywords")
-
         private val VALID_LANGUAGE =
             Regex("[a-z]{2,3}(-[A-Za-z]{2,4})?", RegexOption.IGNORE_CASE)
 
-        /**
-         * Merge optional overlays over a base JSON document, then fold in the
-         * runtime imported profile and custom terms. Pure function so it is
-         * unit-testable without an Android Context.
-         *
-         * Semantics (explicit, per spec):
-         * - expectedLanguages: imported overrides when non-empty, else
-         *   deployment/default
-         * - transcriptionContext: imported overrides when non-blank, else
-         *   deployment/default
-         * - keywords: union (dedup, order-preserving) of deployment + imported
-         *   + custom terms
-         */
+        /** Pure merge; unit-testable without an Android Context. */
         fun merge(
             base: JSONObject,
-            overlay: JSONObject?,
             imported: TranscriptionProfile?,
             customTerms: List<String>,
         ): TranscriptionProfile {
-            // 1. default + deployment overlay (JSON level)
-            val merged = JSONObject(base.toString())
-            overlay?.let { o ->
-                o.keys().forEach { key ->
-                    when {
-                        !base.has(key) -> merged.put(key, o.get(key))
-                        UNION_ARRAY_KEYS.contains(key) -> {
-                            val combined = JSONArray()
-                            val baseArr = base.getJSONArray(key)
-                            for (i in 0 until baseArr.length()) combined.put(baseArr.get(i))
-                            val overlayArr = o.getJSONArray(key)
-                            for (i in 0 until overlayArr.length()) combined.put(overlayArr.get(i))
-                            merged.put(key, combined)
-                        }
-                        else -> merged.put(key, o.get(key))
-                    }
-                }
-            }
-
-            // 2. values from default/deployment
-            val deploymentLanguages = merged
+            val defaultLanguages = base
                 .optJSONArray("expectedLanguages")
                 ?.let { arr -> List(arr.length()) { arr.getString(it) } }
                 .orEmpty()
                 .filter { VALID_LANGUAGE.matches(it) }
-            val deploymentContext = merged.optString("transcriptionContext").trim()
+            val defaultContext = base.optString("transcriptionContext").trim()
+            val defaultKeywords = base
+                .optJSONArray("keywords")
+                ?.let { arr -> List(arr.length()) { arr.getString(it) } }
+                .orEmpty()
+                .map { sanitizeKeyword(it) }
 
-            // 3. imported layer overrides when provided
             val languages =
-                imported?.expectedLanguages?.takeIf { it.isNotEmpty() } ?: deploymentLanguages
+                imported?.expectedLanguages?.takeIf { it.isNotEmpty() } ?: defaultLanguages
             val context =
-                imported?.transcriptionContext?.takeIf { it.isNotBlank() } ?: deploymentContext
+                imported?.transcriptionContext?.takeIf { it.isNotBlank() } ?: defaultContext
+            // Imported keywords replace the default list entirely.
+            val profileKeywords = imported?.keywords ?: defaultKeywords
 
-            // 4. keywords: deployment + imported + custom terms, unioned
             val keywords = buildList {
-                merged.optJSONArray("keywords")?.let { arr ->
-                    for (i in 0 until arr.length()) add(sanitizeKeyword(arr.getString(i)))
-                }
-                imported?.keywords?.forEach { add(sanitizeKeyword(it)) }
+                addAll(profileKeywords.map { sanitizeKeyword(it) })
                 customTerms.forEach { add(sanitizeKeyword(it)) }
             }.distinct().filter { it.isNotEmpty() }
 
@@ -101,17 +73,16 @@ data class TranscriptionProfile(
          * The API rejects `<`, `>`, CR and LF inside prompt/keywords and
          * rejects the whole request. Strip them defensively at the edge.
          */
-        private fun sanitizeKeyword(raw: String): String =
+        fun sanitizeKeyword(raw: String): String =
             raw.replace(Regex("[<>\\r\\n]+"), " ").trim()
     }
 }
 
 object AppConfig {
     private const val ASSET_DEFAULT = "default.json"
-    private const val ASSET_LOCAL = "local.json"
     private const val TAG = "AppConfig"
 
-    /** Loads the effective profile for the given imported profile and custom terms. */
+    /** Effective profile: generic default asset + imported profile + custom terms. */
     fun load(
         context: Context,
         imported: TranscriptionProfile?,
@@ -122,9 +93,12 @@ object AppConfig {
             // transcribing with an empty profile.
             throw IllegalStateException("Missing required asset: $ASSET_DEFAULT")
         }
-        val localJson = readAsset(context, ASSET_LOCAL)
-        return TranscriptionProfile.merge(defaultJson, localJson, imported, customTerms)
+        return TranscriptionProfile.merge(defaultJson, imported, customTerms)
     }
+
+    /** The generic default profile (no imported layer, no custom terms). */
+    fun loadDefault(context: Context): TranscriptionProfile =
+        load(context, imported = null, customTerms = emptyList())
 
     private fun readAsset(context: Context, name: String): JSONObject? =
         try {

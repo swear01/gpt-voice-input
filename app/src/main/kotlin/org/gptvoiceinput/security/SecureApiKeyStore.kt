@@ -11,11 +11,16 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * API key storage encrypted at rest with a non-exportable AES key held in the
- * Android Keystore. The key material never leaves secure hardware / the
- * Keystore; only the ciphertext + IV is persisted in SharedPreferences.
+ * API key storage: ciphertext + IV in SharedPreferences, key material held by
+ * the Android Keystore (non-exportable) through [AndroidKeyStoreEncryptor].
+ *
+ * The plaintext key is only ever in memory during save/load; it is never
+ * written to prefs, JSON, logs, or crash reports.
  */
-class SecureApiKeyStore(context: Context) {
+class SecureApiKeyStore(
+    context: Context,
+    private val encryptor: SecretEncryptor = AndroidKeyStoreEncryptor(),
+) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -24,13 +29,10 @@ class SecureApiKeyStore(context: Context) {
 
     fun save(apiKey: String) {
         require(apiKey.isNotBlank()) { "API key must not be blank" }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val ciphertext = cipher.doFinal(apiKey.toByteArray(Charsets.UTF_8))
-        val iv = cipher.iv
+        val blob = encryptor.encrypt(apiKey)
         prefs.edit()
-            .putString(KEY_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
-            .putString(KEY_CIPHERTEXT, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+            .putString(KEY_IV, Base64.encodeToString(blob.iv, Base64.NO_WRAP))
+            .putString(KEY_CIPHERTEXT, Base64.encodeToString(blob.ciphertext, Base64.NO_WRAP))
             .apply()
     }
 
@@ -39,13 +41,10 @@ class SecureApiKeyStore(context: Context) {
         val ivB64 = prefs.getString(KEY_IV, null) ?: return null
         val ctB64 = prefs.getString(KEY_CIPHERTEXT, null) ?: return null
         return try {
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(
-                Cipher.DECRYPT_MODE,
-                getOrCreateKey(),
-                GCMParameterSpec(GCM_TAG_BITS, Base64.decode(ivB64, Base64.NO_WRAP)),
+            encryptor.decrypt(
+                Base64.decode(ivB64, Base64.NO_WRAP),
+                Base64.decode(ctB64, Base64.NO_WRAP),
             )
-            String(cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP)), Charsets.UTF_8)
         } catch (e: Exception) {
             // Corrupted storage or Keystore key rotated away: treat as absent.
             clear()
@@ -55,6 +54,48 @@ class SecureApiKeyStore(context: Context) {
 
     fun clear() {
         prefs.edit().remove(KEY_IV).remove(KEY_CIPHERTEXT).apply()
+    }
+
+    companion object {
+        private const val PREFS_NAME = "secure_api_key"
+        private const val KEY_IV = "iv"
+        private const val KEY_CIPHERTEXT = "ciphertext"
+    }
+}
+
+/** Encrypted payload: random IV + ciphertext. */
+data class EncryptedBlob(val iv: ByteArray, val ciphertext: ByteArray)
+
+interface SecretEncryptor {
+    fun encrypt(plaintext: String): EncryptedBlob
+
+    fun decrypt(iv: ByteArray, ciphertext: ByteArray): String
+}
+
+/**
+ * AES-256-GCM with a non-exportable key inside the Android Keystore.
+ * Only usable on device / emulator (Robolectric has no AndroidKeyStore
+ * provider); the store logic itself is tested with a fake encryptor.
+ */
+class AndroidKeyStoreEncryptor : SecretEncryptor {
+
+    override fun encrypt(plaintext: String): EncryptedBlob {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        return EncryptedBlob(
+            iv = cipher.iv,
+            ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8)),
+        )
+    }
+
+    override fun decrypt(iv: ByteArray, ciphertext: ByteArray): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            getOrCreateKey(),
+            GCMParameterSpec(GCM_TAG_BITS, iv),
+        )
+        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -77,13 +118,10 @@ class SecureApiKeyStore(context: Context) {
         return generator.generateKey()
     }
 
-    companion object {
-        private const val PREFS_NAME = "secure_api_key"
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "gpt_voice_input_api_key"
-        private const val KEY_IV = "iv"
-        private const val KEY_CIPHERTEXT = "ciphertext"
-        private const val GCM_TAG_BITS = 128
-        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    private companion object {
+        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val KEY_ALIAS = "gpt_voice_input_api_key"
+        const val GCM_TAG_BITS = 128
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }

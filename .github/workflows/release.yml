@@ -11,10 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Optional deployment profile: base64-encoded config/local.json content.
-      # When absent, the APK ships with the generic default only.
-      GVI_DEPLOYMENT_CONFIG_BASE64: ${{ secrets.GVI_DEPLOYMENT_CONFIG_BASE64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,16 +33,6 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Inject deployment profile (optional)
-        run: |
-          if [ -n "$GVI_DEPLOYMENT_CONFIG_BASE64" ]; then
-            echo "$GVI_DEPLOYMENT_CONFIG_BASE64" | base64 -d > config/local.json
-            python3 -m json.tool config/local.json > /dev/null
-            echo "Deployment profile injected and JSON-validated."
-          else
-            echo "No deployment profile secret — building with generic default only."
-          fi
 
       - name: Derive version from tag
         run: |
@@ -104,11 +90,6 @@ jobs:
           else
             echo "no previous release; this is the first one"
           fi
-
-      - name: Verify deployment profile asset in APK
-        if: env.GVI_DEPLOYMENT_CONFIG_BASE64 != ''
-        run: |
-          unzip -l app/build/outputs/apk/release/app-release.apk | grep "assets/local.json"
 
       - name: Rename APK to a predictable asset name
         run: |

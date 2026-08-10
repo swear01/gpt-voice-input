@@ -37,18 +37,6 @@ fun resolveReleaseKeystore(): File? {
 
 val localSigningProps = loadLocalSigningProps()
 
-val syncConfig by tasks.registering(Copy::class) {
-    // Ship config/default.json and, when present, the gitignored
-    // config/local.json deployment overlay as assets. personal.example.json
-    // is documentation only and never ships.
-    from(rootProject.file("config")) {
-        include("default.json", "local.json")
-    }
-    into(layout.buildDirectory.dir("generated/config"))
-}
-
-tasks.named("preBuild") { dependsOn(syncConfig) }
-
 android {
     namespace = "org.gptvoiceinput"
     compileSdk = 35
@@ -63,7 +51,9 @@ android {
 
     sourceSets {
         getByName("main") {
-            assets.srcDir(layout.buildDirectory.dir("generated/config"))
+            // Only the generic public default ships. Personal configuration
+            // is runtime data (Settings → Advanced → Import), never an asset.
+            assets.srcDirs("src/main/assets")
         }
     }
 
