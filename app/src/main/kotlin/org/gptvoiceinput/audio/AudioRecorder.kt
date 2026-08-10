@@ -1,12 +1,16 @@
 package org.gptvoiceinput.audio
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.SystemClock
+import android.annotation.SuppressLint
 import android.util.Log
+import androidx.core.content.ContextCompat
 import java.io.File
 
 /**
@@ -61,6 +65,15 @@ class AudioRecorder(
     /** Returns false if the microphone could not be opened. */
     fun start(): Boolean {
         if (running) return true
+        // Defense in depth: the UI gates on the permission, but never rely on
+        // a caller for a SecurityException-free AudioRecord construction.
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            listener.onRecordingError("Microphone permission is required")
+            return false
+        }
         return try {
             val chosen = openAudioRecord() ?: run {
                 listener.onRecordingError("Microphone unavailable on this device")
@@ -169,6 +182,12 @@ class AudioRecorder(
         listener.onRecordingError(message)
     }
 
+    /**
+     * Picks the best supported (source, rate). The RECORD_AUDIO permission is
+     * verified in [start] before this is ever reached; lint cannot see across
+     * method boundaries, hence the suppression.
+     */
+    @SuppressLint("MissingPermission")
     private fun openAudioRecord(): ChosenSource? {
         val sources = buildList {
             if (supportsUnprocessed()) add(MediaRecorder.AudioSource.UNPROCESSED)
