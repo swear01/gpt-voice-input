@@ -11,85 +11,16 @@ class ConfigMergeTest {
         {
           "expectedLanguages": ["zh-tw", "en"],
           "transcriptionContext": "Neutral default context.",
-          "keywords": ["Zed"]
+          "keywords": []
         }
         """.trimIndent(),
     )
 
     private fun merge(
         base: JSONObject = defaultJson,
-        overlay: JSONObject? = null,
         imported: TranscriptionProfile? = null,
         customTerms: List<String> = emptyList(),
-    ) = TranscriptionProfile.merge(base, overlay, imported, customTerms)
-
-    @Test
-    fun `default alone is used when no overlay`() {
-        val profile = merge()
-        assertEquals(listOf("zh-tw", "en"), profile.expectedLanguages)
-        assertEquals("Neutral default context.", profile.transcriptionContext)
-        assertEquals(listOf("Zed"), profile.keywords)
-    }
-
-    @Test
-    fun `overlay replaces strings and unions keywords`() {
-        val overlay = JSONObject(
-            """
-            {
-              "transcriptionContext": "Personal context.",
-              "keywords": ["HAPI", "Zed"]
-            }
-            """.trimIndent(),
-        )
-        val profile = merge(overlay = overlay)
-        assertEquals("Personal context.", profile.transcriptionContext)
-        // languages untouched by overlay
-        assertEquals(listOf("zh-tw", "en"), profile.expectedLanguages)
-        // union, deduped, default-first
-        assertEquals(listOf("Zed", "HAPI"), profile.keywords)
-    }
-
-    @Test
-    fun `overlay replaces languages when present`() {
-        val overlay = JSONObject("""{"expectedLanguages": ["yue", "cmn"]}""")
-        val profile = merge(overlay = overlay)
-        assertEquals(listOf("yue", "cmn"), profile.expectedLanguages)
-    }
-
-    @Test
-    fun `custom terms merge into keywords without duplicates`() {
-        val profile = merge(customTerms = listOf("HAPI", "zed", "Pi Agent"))
-        assertEquals(listOf("Zed", "HAPI", "zed", "Pi Agent"), profile.keywords)
-    }
-
-    @Test
-    fun `unknown overlay keys are ignored`() {
-        val overlay = JSONObject("""{"_comment": "nope", "apiKey": "sk-secret"}""")
-        val profile = merge(overlay = overlay)
-        assertEquals("Neutral default context.", profile.transcriptionContext)
-    }
-
-    @Test
-    fun `invalid language codes are dropped`() {
-        val overlay = JSONObject("""{"expectedLanguages": ["en", "!!!bad", ""]}""")
-        val profile = merge(overlay = overlay)
-        assertEquals(listOf("en"), profile.expectedLanguages)
-    }
-
-    @Test
-    fun `keywords are sanitized of characters the API rejects`() {
-        val profile = merge(customTerms = listOf("a<b", "c>d", "e\r\nf", "  spaced  "))
-        assertEquals(listOf("Zed", "a b", "c d", "e f", "spaced"), profile.keywords)
-    }
-
-    @Test
-    fun `regional zh codes survive validation`() {
-        val overlay = JSONObject("""{"expectedLanguages": ["zh-tw", "zh-hk", "zh-cn"]}""")
-        val profile = merge(overlay = overlay)
-        assertEquals(listOf("zh-tw", "zh-hk", "zh-cn"), profile.expectedLanguages)
-    }
-
-    // ---------------------------------------------------------- imported layer
+    ) = TranscriptionProfile.merge(base, imported, customTerms)
 
     private fun imported(
         languages: List<String> = emptyList(),
@@ -98,70 +29,113 @@ class ConfigMergeTest {
     ) = TranscriptionProfile(languages, context, keywords)
 
     @Test
-    fun `imported languages override deployment when provided`() {
-        val overlay = JSONObject("""{"expectedLanguages": ["zh-tw", "en"]}""")
-        val profile = merge(overlay = overlay, imported = imported(languages = listOf("yue", "cmn")))
+    fun `default alone is used when no imported profile`() {
+        val profile = merge()
+        assertEquals(listOf("zh-tw", "en"), profile.expectedLanguages)
+        assertEquals("Neutral default context.", profile.transcriptionContext)
+        assertEquals(emptyList<String>(), profile.keywords)
+    }
+
+    @Test
+    fun `default keywords plus custom terms when no imported profile`() {
+        val profile = merge(customTerms = listOf("HAPI", "zed", "Pi Agent"))
+        assertEquals(listOf("HAPI", "zed", "Pi Agent"), profile.keywords)
+    }
+
+    @Test
+    fun `imported languages override default when provided`() {
+        val profile = merge(imported = imported(languages = listOf("yue", "cmn")))
         assertEquals(listOf("yue", "cmn"), profile.expectedLanguages)
     }
 
     @Test
-    fun `empty imported languages keep deployment languages`() {
-        val overlay = JSONObject("""{"expectedLanguages": ["zh-tw", "en"]}""")
-        val profile = merge(overlay = overlay, imported = imported())
+    fun `empty imported languages keep default languages`() {
+        val profile = merge(imported = imported())
         assertEquals(listOf("zh-tw", "en"), profile.expectedLanguages)
     }
 
     @Test
-    fun `imported context overrides deployment when non-blank`() {
-        val overlay = JSONObject("""{"transcriptionContext": "Deployment context."}""")
-        val profile = merge(overlay = overlay, imported = imported(context = "Imported context."))
+    fun `imported context overrides default when non-blank`() {
+        val profile = merge(imported = imported(context = "Imported context."))
         assertEquals("Imported context.", profile.transcriptionContext)
     }
 
     @Test
-    fun `blank imported context keeps deployment context`() {
-        val overlay = JSONObject("""{"transcriptionContext": "Deployment context."}""")
-        val profile = merge(overlay = overlay, imported = imported())
-        assertEquals("Deployment context.", profile.transcriptionContext)
+    fun `blank imported context keeps default context`() {
+        val profile = merge(imported = imported())
+        assertEquals("Neutral default context.", profile.transcriptionContext)
     }
 
     @Test
-    fun `imported keywords merge after deployment keywords`() {
-        val overlay = JSONObject("""{"keywords": ["HAPI", "Synopsys"]}""")
+    fun `imported keywords replace the default keyword list`() {
+        val profile = merge(imported = imported(keywords = listOf("HAPI", "BTOR2")))
+        assertEquals(listOf("HAPI", "BTOR2"), profile.keywords)
+    }
+
+    @Test
+    fun `effective keywords are imported keywords plus custom terms deduped`() {
         val profile = merge(
-            overlay = overlay,
-            imported = imported(keywords = listOf("HAPI", "BTOR2")),
-            customTerms = listOf("MathSAT"),
+            imported = imported(keywords = listOf("HAPI", "ACP")),
+            customTerms = listOf("HAPI", "MathSAT"),
         )
-        // deployment + imported + custom terms, deduped, order-preserving
-        assertEquals(
-            listOf("Zed", "HAPI", "Synopsys", "BTOR2", "MathSAT"),
-            profile.keywords,
-        )
+        assertEquals(listOf("HAPI", "ACP", "MathSAT"), profile.keywords)
     }
 
     @Test
-    fun `full layering default - deployment - imported - custom terms`() {
-        val overlay = JSONObject(
+    fun `keywords are sanitized of characters the API rejects`() {
+        val profile = merge(customTerms = listOf("a<b", "c>d", "e\r\nf", "  spaced  "))
+        assertEquals(listOf("a b", "c d", "e f", "spaced"), profile.keywords)
+    }
+
+    @Test
+    fun `regional zh codes survive validation`() {
+        val profile = merge(imported = imported(languages = listOf("zh-tw", "zh-hk", "zh-cn")))
+        assertEquals(listOf("zh-tw", "zh-hk", "zh-cn"), profile.expectedLanguages)
+    }
+
+    // ------------------------------------------------------- update persistence
+
+    /**
+     * Critical invariant: an APK update that changes default.json must NOT
+     * erase the runtime imported profile. The imported layer keeps overriding
+     * the new defaults after the update.
+     */
+    @Test
+    fun `imported profile overrides a changed default - survives update`() {
+        val imported = imported(
+            languages = listOf("yue", "cmn"),
+            context = "Imported context that must survive updates.",
+            keywords = listOf("HAPI"),
+        )
+        val defaultV1 = JSONObject(
             """
             {
               "expectedLanguages": ["zh-tw", "en"],
-              "transcriptionContext": "Deployment context.",
-              "keywords": ["Zed", "ACP"]
+              "transcriptionContext": "v1 default context.",
+              "keywords": []
             }
             """.trimIndent(),
         )
-        val profile = merge(
-            overlay = overlay,
-            imported = imported(
-                languages = listOf("yue"),
-                context = "Imported context.",
-                keywords = listOf("HAPI", "ACP"),
-            ),
-            customTerms = listOf("MCP"),
+        val effV1 = TranscriptionProfile.merge(defaultV1, imported, emptyList())
+
+        // APK update ships a different default.json.
+        val defaultV2 = JSONObject(
+            """
+            {
+              "expectedLanguages": ["en"],
+              "transcriptionContext": "v2 default context.",
+              "keywords": ["newDefaultKeyword"]
+            }
+            """.trimIndent(),
         )
-        assertEquals(listOf("yue"), profile.expectedLanguages)
-        assertEquals("Imported context.", profile.transcriptionContext)
-        assertEquals(listOf("Zed", "ACP", "HAPI", "MCP"), profile.keywords)
+        val effV2 = TranscriptionProfile.merge(defaultV2, imported, emptyList())
+
+        assertEquals(effV1.expectedLanguages, effV2.expectedLanguages)
+        assertEquals(effV1.transcriptionContext, effV2.transcriptionContext)
+        assertEquals(effV1.keywords, effV2.keywords)
+        // And the imported values specifically still win over the new default:
+        assertEquals(listOf("yue", "cmn"), effV2.expectedLanguages)
+        assertEquals("Imported context that must survive updates.", effV2.transcriptionContext)
+        assertEquals(listOf("HAPI"), effV2.keywords)
     }
 }
