@@ -1,0 +1,154 @@
+package org.gptvoiceinput.net
+
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.gptvoiceinput.config.TranscriptionProfile
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import java.io.File
+import java.util.concurrent.TimeUnit
+
+/**
+ * Verifies the gpt-transcribe wire format against MockWebServer: exact
+ * multipart field names, repeated `[]` array encoding, auth header, response
+ * parsing, error mapping and no-auto-retry-on-timeout behavior.
+ */
+class OpenAITranscriberTest {
+
+    private lateinit var server: MockWebServer
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun profile(
+        context: String = "Neutral context.",
+        languages: List<String> = listOf("zh-tw", "en"),
+        keywords: List<String> = listOf("HAPI", "Pi Agent"),
+    ) = TranscriptionProfile(languages, context, keywords)
+
+    private fun transcriber(client: OkHttpClient = OkHttpClient()): OpenAITranscriber =
+        OpenAITranscriber("test-key", client, endpoint = server.url("/").toString())
+
+    private fun wavFile(): File {
+        val f = File.createTempFile("gvi-test", ".wav")
+        f.writeBytes(ByteArray(100))
+        f.deleteOnExit()
+        return f
+    }
+
+    @Test
+    fun `sends the documented gpt-transcribe multipart fields`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody("""{"text":"你好 world","languages":[{"code":"zh"}]}"""),
+        )
+        val text = transcriber().transcribe(wavFile(), profile())
+        assertEquals("你好 world", text)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/", recorded.path)
+        assertEquals("Bearer test-key", recorded.getHeader("Authorization"))
+
+        val body = recorded.body.readUtf8()
+        assertTrue("model part", body.contains("name=\"model\""))
+        assertTrue("model value", body.contains("gpt-transcribe"))
+        assertTrue("file part", body.contains("name=\"file\""))
+        assertTrue("filename", body.contains("filename=\""))
+        assertTrue("prompt part", body.contains("name=\"prompt\""))
+        assertTrue("prompt value", body.contains("Neutral context."))
+        assertTrue("languages[] repeated", body.contains("name=\"languages[]\""))
+        assertTrue("language zh-tw", body.contains("zh-tw"))
+        assertTrue("language en", body.contains("en"))
+        assertTrue("keywords[] repeated", body.contains("name=\"keywords[]\""))
+        assertTrue("keyword HAPI", body.contains("HAPI"))
+        assertTrue("keyword Pi Agent", body.contains("Pi Agent"))
+        // For gpt-transcribe the plural `languages` replaces `language`;
+        // the singular field must never be sent.
+        assertFalse("no singular language field", body.contains("name=\"language\""))
+    }
+
+    @Test
+    fun `empty keyword and language lists are omitted`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"text":"plain"}"""))
+        transcriber().transcribe(
+            wavFile(),
+            TranscriptionProfile(emptyList(), "", emptyList()),
+        )
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body.contains("languages[]"))
+        assertFalse(body.contains("keywords[]"))
+        assertFalse(body.contains("name=\"prompt\""))
+        assertTrue(body.contains("name=\"file\""))
+        assertTrue(body.contains("name=\"model\""))
+    }
+
+    @Test
+    fun `response without text is a protocol error`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"languages":[]}"""))
+        val result = runCatching { transcriber().transcribe(wavFile(), profile()) }
+        assertTrue(result.exceptionOrNull() is TranscriptionException.Protocol)
+    }
+
+    @Test(expected = TranscriptionException.Unauthorized::class)
+    fun `401 maps to Unauthorized`() {
+        runBlocking {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(401)
+                    .setBody("""{"error":{"message":"Incorrect API key","type":"invalid_request_error"}}"""),
+            )
+            transcriber().transcribe(wavFile(), profile())
+        }
+    }
+
+    @Test(expected = TranscriptionException.RateLimited::class)
+    fun `429 maps to RateLimited`() {
+        runBlocking {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(429)
+                    .setBody("""{"error":{"message":"Rate limit reached","type":"rate_limit_error"}}"""),
+            )
+            transcriber().transcribe(wavFile(), profile())
+        }
+    }
+
+    @Test(expected = TranscriptionException.ServerError::class)
+    fun `5xx maps to ServerError`() {
+        runBlocking {
+            server.enqueue(
+                MockResponse().setResponseCode(503).setBody("""{"error":{"message":"overloaded"}}"""),
+            )
+            transcriber().transcribe(wavFile(), profile())
+        }
+    }
+
+    @Test
+    fun `timeout maps to Timeout and is never auto-retried`() = runBlocking {
+        val shortClient = OkHttpClient.Builder()
+            .readTimeout(200, TimeUnit.MILLISECONDS)
+            .build()
+        server.enqueue(
+            MockResponse().setBody("""{"text":"late"}""").setBodyDelay(2, TimeUnit.SECONDS),
+        )
+        val result = runCatching { transcriber(shortClient).transcribe(wavFile(), profile()) }
+        assertTrue(result.exceptionOrNull() is TranscriptionException.Timeout)
+        // Exactly one POST: ambiguous timeouts surface to the user for an
+        // explicit retry instead of an automatic duplicate billable request.
+        assertEquals(1, server.requestCount)
+    }
+}
