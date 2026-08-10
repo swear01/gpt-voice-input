@@ -9,6 +9,7 @@
     <string name="status_listening">Listening…</string>
     <string name="status_transcribing">Transcribing…</string>
     <string name="status_transcribe_failed">Couldn\'t transcribe</string>
+    <string name="error_unauthorized">OpenAI rejected the API key.\nCheck or replace the key in Settings.</string>
     <string name="status_recording_failed">Recording failed</string>
     <string name="status_no_key">Set your OpenAI API key</string>
     <string name="hint_no_key">Open Settings to continue</string>

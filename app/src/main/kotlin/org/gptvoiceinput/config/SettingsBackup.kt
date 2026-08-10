@@ -119,6 +119,12 @@ object SettingsBackup {
             ?.optString("openAiApiKey", "")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+        if (apiKey != null && isPlaceholder(apiKey)) {
+            throw BackupException.Invalid(
+                "The file contains a placeholder API key (" +
+                    "REPLACE_WITH_YOUR_OPENAI_API_KEY). Fill in a real key first.",
+            )
+        }
 
         // profile (optional, validated when present)
         val profile = root.optJSONObject(KEY_PROFILE)?.let { p ->
@@ -174,6 +180,25 @@ object SettingsBackup {
     /** Same edge sanitization as the rest of the app (API rejects <,>,CR,LF). */
     fun sanitizeKeyword(raw: String): String =
         raw.replace(Regex("[<>\\r\\n]+"), " ").trim()
+
+    /**
+     * Placeholder detection for template keys. Conservative by design: only
+     * rejects obvious template markers, never an exact real-key regex, so
+     * future legitimate OpenAI key formats are not blocked.
+     */
+    fun isPlaceholder(key: String): Boolean {
+        val k = key.trim()
+        return PLACEHOLDER_PATTERNS.any { it.containsMatchIn(k) }
+    }
+
+    private val PLACEHOLDER_PATTERNS = listOf(
+        Regex("REPLACE_WITH_YOUR_OPENAI_API_KEY", RegexOption.IGNORE_CASE),
+        Regex("YOUR_OPENAI_API_KEY", RegexOption.IGNORE_CASE),
+        Regex("YOUR_API_KEY", RegexOption.IGNORE_CASE),
+        Regex("OPENAI_API_KEY", RegexOption.IGNORE_CASE),
+        Regex("sk-\\.\\.\\.", RegexOption.IGNORE_CASE), // literal "sk-..."
+        Regex("REPLACE_.*KEY", RegexOption.IGNORE_CASE), // generic template marker
+    )
 
     private fun sanitizeAll(list: List<String>): List<String> =
         list.map { sanitizeKeyword(it) }.filter { it.isNotEmpty() }.distinct()

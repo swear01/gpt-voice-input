@@ -55,6 +55,7 @@ class RecognitionActivity : AppCompatActivity() {
     private lateinit var errorButtons: View
     private lateinit var retryButton: Button
     private lateinit var cancelButton: Button
+    private lateinit var openSettingsErrorButton: Button
     private lateinit var settingsActionButton: Button
 
     private var phase: Phase = Phase.NO_KEY
@@ -95,6 +96,7 @@ class RecognitionActivity : AppCompatActivity() {
         errorButtons = findViewById(R.id.error_buttons)
         retryButton = findViewById(R.id.retry_button)
         cancelButton = findViewById(R.id.cancel_button)
+        openSettingsErrorButton = findViewById(R.id.open_settings_error_button)
         settingsActionButton = findViewById(R.id.settings_action_button)
 
         rootView.setOnClickListener {
@@ -103,6 +105,7 @@ class RecognitionActivity : AppCompatActivity() {
         gearButton.setOnClickListener { openSettings() }
         retryButton.setOnClickListener { retry() }
         cancelButton.setOnClickListener { cancelSession() }
+        openSettingsErrorButton.setOnClickListener { openSettings() }
         settingsActionButton.setOnClickListener { openSettings() }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -347,9 +350,18 @@ class RecognitionActivity : AppCompatActivity() {
     private fun showError(error: TranscriptionException) {
         setPhase(Phase.ERROR)
         statusText.setText(R.string.status_transcribe_failed)
-        hintText.text = error.localizedMessage ?: getString(R.string.hint_error_generic)
+        if (error is TranscriptionException.Unauthorized) {
+            // Deterministic auth failure: retrying with the same key cannot
+            // help, and we never surface server-provided key fragments/URLs.
+            hintText.setText(R.string.error_unauthorized)
+            retryButton.visibility = View.GONE
+            openSettingsErrorButton.visibility = View.VISIBLE
+        } else {
+            hintText.text = error.localizedMessage ?: getString(R.string.hint_error_generic)
+            retryButton.visibility = if (wavReady && tempWav.exists()) View.VISIBLE else View.GONE
+            openSettingsErrorButton.visibility = View.GONE
+        }
         errorButtons.visibility = View.VISIBLE
-        retryButton.visibility = if (wavReady && tempWav.exists()) View.VISIBLE else View.GONE
     }
 
     private fun setPhase(newPhase: Phase) {

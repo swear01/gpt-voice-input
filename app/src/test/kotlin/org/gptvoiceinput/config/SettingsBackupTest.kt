@@ -221,6 +221,48 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun `placeholder api keys are rejected on import`() {
+        for (placeholder in listOf(
+            "REPLACE_WITH_YOUR_OPENAI_API_KEY",
+            "YOUR_OPENAI_API_KEY",
+            "YOUR_API_KEY",
+            "OPENAI_API_KEY",
+            "sk-...",
+            "replace_with_your_openai_api_key", // case-insensitive
+            "  REPLACE_WITH_YOUR_OPENAI_API_KEY  ", // trimmed
+            "REPLACE_THE_KEY_HERE", // generic REPLACE_..._KEY marker
+        )) {
+            val secrets = JSONObject().put("openAiApiKey", placeholder)
+            val e = assertThrows(BackupException.Invalid::class.java) {
+                SettingsBackup.parse(fileJson(secrets = secrets))
+            }
+            assertTrue("$placeholder should be rejected", e.message.orEmpty().contains("placeholder"))
+        }
+    }
+
+    @Test
+    fun `valid non-placeholder api key is accepted`() {
+        for (valid in listOf(
+            "sk-test-123",
+            "sk-proj-a1b2c3d4",
+            "sess-xyz",
+            "a-random-non-template-string",
+        )) {
+            val secrets = JSONObject().put("openAiApiKey", valid)
+            assertEquals(valid, SettingsBackup.parse(fileJson(secrets = secrets)).apiKey)
+        }
+    }
+
+    @Test
+    fun `placeholder import rejects the whole file atomically`() {
+        // Even with a valid profile, a placeholder secret fails the entire import.
+        val secrets = JSONObject().put("openAiApiKey", "REPLACE_WITH_YOUR_OPENAI_API_KEY")
+        assertThrows(BackupException.Invalid::class.java) {
+            SettingsBackup.parse(fileJson(secrets = secrets))
+        }
+    }
+
+    @Test
     fun `profile section absent yields null profile`() {
         val parsed = SettingsBackup.parse(fileJson(profile = null))
         assertNull(parsed.profile)

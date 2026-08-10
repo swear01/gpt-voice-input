@@ -116,16 +116,14 @@ class OpenAITranscriber(
         }
 
     private fun parseError(code: Int, body: String): TranscriptionException {
-        val apiMessage = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }
-            .getOrNull()
-            ?: "Request failed"
-        val apiType = runCatching { JSONObject(body).optJSONObject("error")?.optString("type") }
-            .getOrNull()
+        // `body` is deliberately NOT propagated into exceptions: OpenAI's
+        // server messages can embed masked API-key fragments and developer
+        // URLs. UI-facing text must be stable, app-owned and safe.
         return when (code) {
-            401, 403 -> TranscriptionException.Unauthorized(apiMessage)
-            429 -> TranscriptionException.RateLimited(apiMessage)
-            in 500..599 -> TranscriptionException.ServerError(code, apiMessage)
-            else -> TranscriptionException.ApiError(code, apiMessage, apiType)
+            401, 403 -> TranscriptionException.Unauthorized()
+            429 -> TranscriptionException.RateLimited()
+            in 500..599 -> TranscriptionException.ServerError(code)
+            else -> TranscriptionException.ApiError(code)
         }
     }
 
@@ -149,17 +147,14 @@ sealed class TranscriptionException(
     cause: Throwable? = null,
 ) : Exception(message, cause) {
 
-    class Unauthorized(message: String?) :
-        TranscriptionException(message ?: "Invalid API key (401)")
+    /** 401/403 — deterministic: retrying with the same key cannot help. */
+    class Unauthorized : TranscriptionException("OpenAI rejected the API key")
 
-    class RateLimited(message: String?) :
-        TranscriptionException(message ?: "Rate limited (429)")
+    class RateLimited : TranscriptionException("Rate limited — please try again in a moment")
 
-    class ServerError(code: Int, message: String?) :
-        TranscriptionException(message ?: "Server error ($code)")
+    class ServerError(val code: Int) : TranscriptionException("OpenAI server error — please try again")
 
-    class ApiError(val code: Int, message: String?, val apiType: String?) :
-        TranscriptionException(message ?: "API error ($code)")
+    class ApiError(val code: Int) : TranscriptionException("OpenAI API error (HTTP $code)")
 
     class Timeout(cause: Throwable) :
         TranscriptionException("Request timed out", cause)

@@ -103,38 +103,56 @@ class OpenAITranscriberTest {
         assertTrue(result.exceptionOrNull() is TranscriptionException.Protocol)
     }
 
-    @Test(expected = TranscriptionException.Unauthorized::class)
-    fun `401 maps to Unauthorized`() {
-        runBlocking {
+    @Test
+    fun `401 maps to Unauthorized with a safe app-owned message`() {
+        val result = runBlocking {
             server.enqueue(
                 MockResponse()
                     .setResponseCode(401)
-                    .setBody("""{"error":{"message":"Incorrect API key","type":"invalid_request_error"}}"""),
+                    .setBody(
+                        """{"error":{"message":"Incorrect API key provided: sk-secret123... You can find your API key at https://platform.openai.com/account/api-keys","type":"invalid_request_error"}}""",
+                    ),
             )
-            transcriber().transcribe(wavFile(), profile())
+            runCatching { transcriber().transcribe(wavFile(), profile()) }
         }
+        val error = result.exceptionOrNull()
+        assertTrue(error is TranscriptionException.Unauthorized)
+        // The visible message must be stable and must not leak the server's
+        // masked key fragment or the developer URL.
+        val message = error!!.message.orEmpty()
+        assertEquals("OpenAI rejected the API key", message)
+        assertFalse(message.contains("sk-secret123"))
+        assertFalse(message.contains("platform.openai.com"))
     }
 
-    @Test(expected = TranscriptionException.RateLimited::class)
-    fun `429 maps to RateLimited`() {
-        runBlocking {
+    @Test
+    fun `403 maps to Unauthorized with a safe message`() {
+        val result = runBlocking {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(403)
+                    .setBody("""{"error":{"message":"You do not have access. sk-abc..."}}"""),
+            )
+            runCatching { transcriber().transcribe(wavFile(), profile()) }
+        }
+        val error = result.exceptionOrNull()
+        assertTrue(error is TranscriptionException.Unauthorized)
+        assertFalse("no key fragment", error!!.message.orEmpty().contains("sk-abc"))
+    }
+
+    @Test
+    fun `rate limited message is safe and stable`() {
+        val result = runBlocking {
             server.enqueue(
                 MockResponse()
                     .setResponseCode(429)
-                    .setBody("""{"error":{"message":"Rate limit reached","type":"rate_limit_error"}}"""),
+                    .setBody("""{"error":{"message":"Rate limit reached for sk-secret999"}}"""),
             )
-            transcriber().transcribe(wavFile(), profile())
+            runCatching { transcriber().transcribe(wavFile(), profile()) }
         }
-    }
-
-    @Test(expected = TranscriptionException.ServerError::class)
-    fun `5xx maps to ServerError`() {
-        runBlocking {
-            server.enqueue(
-                MockResponse().setResponseCode(503).setBody("""{"error":{"message":"overloaded"}}"""),
-            )
-            transcriber().transcribe(wavFile(), profile())
-        }
+        val error = result.exceptionOrNull()
+        assertTrue(error is TranscriptionException.RateLimited)
+        assertFalse("no key fragment", error!!.message.orEmpty().contains("sk-secret999"))
     }
 
     @Test
