@@ -3,6 +3,8 @@ package org.gptvoiceinput.ui
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.TextView
 import org.gptvoiceinput.R
 import org.gptvoiceinput.config.SettingsStore
 import org.junit.Assert.assertEquals
@@ -54,7 +56,7 @@ class SettingsActivityTest {
     }
 
     @Test
-    fun `no api key - hint and no clear button`() {
+    fun `no api key - status text and no clear button`() {
         appContext.getSharedPreferences("secure_api_key", android.content.Context.MODE_PRIVATE)
             .edit().clear().apply()
         val activity = launch().get()
@@ -63,21 +65,25 @@ class SettingsActivityTest {
             activity.findViewById<EditText>(R.id.api_key_edit).hint.toString(),
         )
         assertEquals(
+            activity.getString(R.string.key_not_configured),
+            activity.findViewById<TextView>(R.id.api_key_status).text.toString(),
+        )
+        assertEquals(
             View.GONE,
             activity.findViewById<Button>(R.id.clear_api_key_button).visibility,
         )
     }
 
     @Test
-    fun `key set - hint and visible clear button`() {
+    fun `key set - status text and visible clear button, no plaintext`() {
         // Seed the keystore-backed store's ciphertext marker directly (hasKey()
         // only inspects SharedPreferences, so no Keystore call is needed here).
         appContext.getSharedPreferences("secure_api_key", android.content.Context.MODE_PRIVATE)
             .edit().putString("iv", "AAAA").putString("ciphertext", "BBBB").apply()
         val activity = launch().get()
         assertEquals(
-            activity.getString(R.string.api_key_hint_set),
-            activity.findViewById<EditText>(R.id.api_key_edit).hint.toString(),
+            activity.getString(R.string.key_configured),
+            activity.findViewById<TextView>(R.id.api_key_status).text.toString(),
         )
         assertEquals(
             View.VISIBLE,
@@ -85,6 +91,59 @@ class SettingsActivityTest {
         )
         // Plaintext must never be shown.
         assertEquals("", activity.findViewById<EditText>(R.id.api_key_edit).text.toString())
+    }
+
+    @Test
+    fun `exactly one primary page title`() {
+        val activity = launch().get()
+        val titleText = activity.getString(R.string.settings_title)
+        val appName = activity.getString(R.string.app_name)
+        val title = activity.findViewById<TextView>(R.id.title_text)
+        assertNotNull(title)
+        assertEquals(titleText, title.text.toString())
+        // No other TextView carries the app name as a separate heading.
+        val root = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+        val texts = collectTextViews(root)
+        assertEquals(1, texts.count { it.text.toString() == titleText })
+        assertEquals(0, texts.count { it.text.toString() == appName && it.id != R.id.title_text })
+    }
+
+    private fun collectTextViews(view: android.view.View): List<TextView> {
+        val result = mutableListOf<TextView>()
+        if (view is TextView) result.add(view)
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                result.addAll(collectTextViews(view.getChildAt(i)))
+            }
+        }
+        return result
+    }
+
+    @Test
+    fun `advanced toggle shows panel, rotates chevron, updates description`() {
+        val activity = launch().get()
+        val header = activity.findViewById<View>(R.id.advanced_header)
+        val panel = activity.findViewById<View>(R.id.advanced_panel)
+        val chevron = activity.findViewById<android.widget.ImageView>(R.id.advanced_chevron)
+
+        assertEquals(View.GONE, panel.visibility)
+        assertEquals(0f, chevron.rotation)
+        assertEquals(
+            activity.getString(R.string.advanced_expand_description),
+            chevron.contentDescription,
+        )
+
+        header.performClick()
+        assertEquals(View.VISIBLE, panel.visibility)
+        assertEquals(180f, chevron.rotation)
+        assertEquals(
+            activity.getString(R.string.advanced_collapse_description),
+            chevron.contentDescription,
+        )
+
+        header.performClick()
+        assertEquals(View.GONE, panel.visibility)
+        assertEquals(0f, chevron.rotation)
     }
 
     @Test

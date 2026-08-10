@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/settings_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -8,62 +10,87 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="24dp">
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/title_text"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="24sp"
+            android:layout_marginTop="20dp"
+            android:text="@string/settings_title"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
+        <!-- OpenAI -->
         <TextView
             style="@style/SectionHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="24dp"
             android:text="@string/section_openai" />
 
         <TextView
             style="@style/FieldLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:text="@string/api_key_label" />
 
         <EditText
             android:id="@+id/api_key_edit"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
             android:hint="@string/api_key_hint"
             android:inputType="textPassword"
             android:maxLines="1" />
 
-        <Button
-            android:id="@+id/clear_api_key_button"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/clear_api_key"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/save_button"
+        <TextView
+            android:id="@+id/api_key_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/save" />
+            android:layout_marginTop="4dp"
+            android:textSize="13sp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/save_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_weight="1"
+                android:text="@string/save" />
+
+            <Button
+                android:id="@+id/clear_api_key_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/clear_api_key"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Recording -->
         <TextView
             style="@style/SectionHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="24dp"
             android:text="@string/section_recording" />
 
         <TextView
             style="@style/FieldLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:text="@string/auto_stop_label" />
 
         <SeekBar
@@ -77,18 +104,34 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
-        <TextView
+        <!-- Advanced -->
+        <LinearLayout
             android:id="@+id/advanced_header"
-            style="@style/SectionHeader"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:text="@string/advanced" />
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/SectionHeader"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/advanced" />
+
+            <ImageView
+                android:id="@+id/advanced_chevron"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@string/advanced_expand_description"
+                android:src="@drawable/ic_chevron"
+                app:tint="@color/primary" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/advanced_panel"
@@ -101,6 +144,7 @@
                 style="@style/FieldLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:text="@string/custom_terms_label" />
 
             <EditText
@@ -131,7 +175,7 @@
                 style="@style/SectionHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="20dp"
                 android:text="@string/section_profile" />
 
             <LinearLayout
@@ -144,8 +188,9 @@
                     android:id="@+id/import_button"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="6dp"
                     android:layout_weight="1"
+                    android:maxLines="2"
                     android:text="@string/import_settings" />
 
                 <Button
@@ -153,6 +198,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:maxLines="2"
                     android:text="@string/export_settings" />
             </LinearLayout>
 
@@ -166,8 +212,9 @@
                     android:id="@+id/export_full_button"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="6dp"
                     android:layout_weight="1"
+                    android:maxLines="2"
                     android:text="@string/export_full_backup" />
 
                 <Button
@@ -175,15 +222,17 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:maxLines="2"
                     android:text="@string/clear_imported_profile" />
             </LinearLayout>
 
             <TextView
                 style="@style/FieldLabel"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:text="@string/backup_excludes_api_key" />
+                android:text="@string/backup_excludes_api_key"
+                android:textSize="12sp" />
         </LinearLayout>
 
     </LinearLayout>

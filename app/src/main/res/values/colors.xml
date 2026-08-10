@@ -10,4 +10,7 @@
 
     <color name="ic_launcher_background">#0F1419</color>
     <color name="ic_launcher_foreground">#F5F7FA</color>
+
+    <color name="key_configured">#1E7A46</color>
+    <color name="key_not_configured">#9AA7B4</color>
 </resources>

@@ -25,12 +25,15 @@
     <string name="section_openai">OpenAI</string>
     <string name="section_recording">Recording</string>
     <string name="api_key_label">API Key</string>
-    <string name="api_key_hint">sk-… (entered on this device only)</string>
-    <string name="api_key_hint_set">A key is saved — enter a new one to replace it</string>
+    <string name="api_key_hint">OpenAI API key</string>
+    <string name="key_configured">Key configured — enter a new key to replace it</string>
+    <string name="key_not_configured">No key configured</string>
     <string name="auto_stop_label">Auto stop after silence</string>
     <string name="auto_stop_seconds">%1$s s</string>
     <string name="auto_stop_off">OFF</string>
     <string name="advanced">Advanced</string>
+    <string name="advanced_expand_description">Expand advanced settings</string>
+    <string name="advanced_collapse_description">Collapse advanced settings</string>
     <string name="custom_terms_label">Custom terms (one per line)</string>
     <string name="custom_terms_hint">e.g. HAPI</string>
     <string name="effective_config_label">Effective configuration</string>

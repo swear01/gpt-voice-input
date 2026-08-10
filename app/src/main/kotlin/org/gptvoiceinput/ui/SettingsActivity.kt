@@ -6,12 +6,15 @@ import android.text.InputType
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import org.gptvoiceinput.R
 import org.gptvoiceinput.config.AppConfig
 import org.gptvoiceinput.config.BackupException
@@ -40,10 +43,12 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var importedProfileStore: ImportedProfileStore
 
     private lateinit var apiKeyEdit: EditText
+    private lateinit var apiKeyStatus: TextView
     private lateinit var clearApiKeyButton: Button
     private lateinit var autoStopSeekBar: SeekBar
     private lateinit var autoStopValue: TextView
-    private lateinit var advancedHeader: TextView
+    private lateinit var advancedHeader: View
+    private lateinit var advancedChevron: ImageView
     private lateinit var advancedPanel: View
     private lateinit var customTermsEdit: EditText
     private lateinit var effectiveConfigText: TextView
@@ -72,13 +77,17 @@ class SettingsActivity : AppCompatActivity() {
         importedProfileStore = ImportedProfileStore(this)
 
         apiKeyEdit = findViewById(R.id.api_key_edit)
+        apiKeyStatus = findViewById(R.id.api_key_status)
         clearApiKeyButton = findViewById(R.id.clear_api_key_button)
         autoStopSeekBar = findViewById(R.id.auto_stop_seekbar)
         autoStopValue = findViewById(R.id.auto_stop_value)
         advancedHeader = findViewById(R.id.advanced_header)
+        advancedChevron = findViewById(R.id.advanced_chevron)
         advancedPanel = findViewById(R.id.advanced_panel)
         customTermsEdit = findViewById(R.id.custom_terms_edit)
         effectiveConfigText = findViewById(R.id.effective_config_text)
+
+        applySystemBarInsets()
 
         apiKeyEdit.inputType =
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -102,11 +111,11 @@ class SettingsActivity : AppCompatActivity() {
         // Restore saved runtime custom terms (regression: v0.1.0 left this blank).
         customTermsEdit.setText(settingsStore.customTerms().joinToString("\n"))
 
+        // Advanced expand/collapse with chevron + accessibility state.
         advancedHeader.setOnClickListener {
-            val show = advancedPanel.visibility != View.VISIBLE
-            advancedPanel.visibility = if (show) View.VISIBLE else View.GONE
-            if (show) renderEffectiveConfig()
+            setAdvancedExpanded(advancedPanel.visibility != View.VISIBLE)
         }
+        setAdvancedExpanded(savedInstanceState?.getBoolean(KEY_ADVANCED_EXPANDED) == true)
 
         findViewById<View>(R.id.save_button).setOnClickListener { save() }
         findViewById<View>(R.id.import_button).setOnClickListener { startImport() }
@@ -116,17 +125,49 @@ class SettingsActivity : AppCompatActivity() {
         clearApiKeyButton.setOnClickListener { confirmClearApiKey() }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_ADVANCED_EXPANDED, advancedPanel.visibility == View.VISIBLE)
+    }
+
+    /** Edge-to-edge (targetSdk 35): keep content below the status bar / above the nav bar. */
+    private fun applySystemBarInsets() {
+        val scroll = findViewById<View>(R.id.settings_scroll)
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(0, bars.top, 0, bars.bottom)
+            insets
+        }
+    }
+
+    private fun setAdvancedExpanded(expanded: Boolean) {
+        advancedPanel.visibility = if (expanded) View.VISIBLE else View.GONE
+        advancedChevron.rotation = if (expanded) 180f else 0f
+        advancedChevron.contentDescription = getString(
+            if (expanded) R.string.advanced_collapse_description
+            else R.string.advanced_expand_description,
+        )
+        if (expanded) renderEffectiveConfig()
+    }
+
     // ---------------------------------------------------------------- key
 
     private fun updateApiKeyHint() {
         if (secureStore.hasKey()) {
-            apiKeyEdit.hint = getString(R.string.api_key_hint_set)
+            apiKeyEdit.hint = getString(R.string.api_key_hint)
+            apiKeyStatus.setText(R.string.key_configured)
+            apiKeyStatus.setTextColor(getColorCompat(R.color.key_configured))
             clearApiKeyButton.visibility = View.VISIBLE
         } else {
             apiKeyEdit.hint = getString(R.string.api_key_hint)
+            apiKeyStatus.setText(R.string.key_not_configured)
+            apiKeyStatus.setTextColor(getColorCompat(R.color.key_not_configured))
             clearApiKeyButton.visibility = View.GONE
         }
     }
+
+    private fun getColorCompat(res: Int): Int =
+        androidx.core.content.ContextCompat.getColor(this, res)
 
     private fun confirmClearApiKey() {
         AlertDialog.Builder(this)
@@ -384,5 +425,6 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         private const val SAFE_EXPORT_FILENAME = "gpt-voice-input-settings.json"
         private const val FULL_BACKUP_FILENAME = "gpt-voice-input-personal.json"
+        private const val KEY_ADVANCED_EXPANDED = "advanced_expanded"
     }
 }
