@@ -18,6 +18,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: GVI_VERSION_CODE is derived from the commit count
+          # and must strictly increase across releases (shallow checkouts
+          # would always count 1 and break seamless updates).
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -68,6 +73,14 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs \
             app/build/outputs/apk/release/app-release.apk
+
+      - name: Verify versionCode in APK
+        run: |
+          VC=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            app/build/outputs/apk/release/app-release.apk \
+            | grep -o "versionCode='[0-9]*'" | head -1 | grep -o '[0-9]*')
+          echo "APK versionCode=$VC expected=$GVI_VERSION_CODE"
+          test "$VC" = "$GVI_VERSION_CODE"
 
       - name: Verify deployment profile asset in APK
         if: env.GVI_DEPLOYMENT_CONFIG_BASE64 != ''
