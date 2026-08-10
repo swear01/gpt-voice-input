@@ -1,0 +1,5 @@
+{
+  "expectedLanguages": ["zh-tw", "en"],
+  "transcriptionContext": "Transcribe natural dictation faithfully.\n\nThe speaker may switch between Traditional Chinese (Taiwan) and English.\nPreserve the original language of each phrase.\nUse Traditional Chinese for Chinese speech.\n\nPreserve punctuation, capitalization, acronyms, product names, code identifiers, and technical terminology.\n\nDo not translate, summarize, paraphrase, or add content.",
+  "keywords": []
+}

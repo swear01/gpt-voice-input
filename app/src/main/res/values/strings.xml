@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPT Voice Input</string>
+    <string name="settings_title">GPT Voice Input — Settings</string>
+
+    <!-- Recognition UI -->
+    <string name="cd_mic">Microphone</string>
+    <string name="cd_settings">Settings</string>
+    <string name="status_listening">Listening…</string>
+    <string name="status_transcribing">Transcribing…</string>
+    <string name="status_transcribe_failed">Couldn\'t transcribe</string>
+    <string name="status_recording_failed">Recording failed</string>
+    <string name="status_no_key">Set your OpenAI API key</string>
+    <string name="hint_no_key">Open Settings to continue</string>
+    <string name="status_no_permission">Microphone permission required</string>
+    <string name="hint_no_permission">Allow microphone access in system settings</string>
+    <string name="hint_tap_to_submit">Tap to submit</string>
+    <string name="hint_error_generic">Something went wrong. Please try again.</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="open_settings">Open Settings</string>
+
+    <!-- Settings UI -->
+    <string name="section_openai">OpenAI</string>
+    <string name="section_recording">Recording</string>
+    <string name="api_key_label">API Key</string>
+    <string name="api_key_hint">sk-… (entered on this device only)</string>
+    <string name="api_key_hint_set">A key is saved — enter a new one to replace it</string>
+    <string name="auto_stop_label">Auto stop after silence</string>
+    <string name="auto_stop_seconds">%1$s s</string>
+    <string name="auto_stop_off">OFF</string>
+    <string name="advanced">Advanced</string>
+    <string name="custom_terms_label">Custom terms (one per line)</string>
+    <string name="custom_terms_hint">e.g. HAPI</string>
+    <string name="effective_config_label">Effective configuration</string>
+    <string name="effective_languages">Languages: %1$s</string>
+    <string name="effective_keywords">Keywords: %1$s</string>
+    <string name="save">Save</string>
+    <string name="saved">Saved</string>
+</resources>

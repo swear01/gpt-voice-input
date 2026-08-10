@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="recognition_bg">#0F1419</color>
+    <color name="recognition_fg">#F5F7FA</color>
+    <color name="recognition_fg_dim">#9AA7B4</color>
+
+    <color name="primary">#0F172A</color>
+    <color name="primary_dark">#0B1120</color>
+    <color name="accent">#2DD4BF</color>
+
+    <color name="ic_launcher_background">#0F1419</color>
+    <color name="ic_launcher_foreground">#F5F7FA</color>
+</resources>
