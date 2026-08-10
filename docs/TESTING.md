@@ -80,21 +80,29 @@ Score each line as correct / partially wrong / wrong, noting the exact error.
 
 ### Import/export
 
-- [ ] export produces valid `schemaVersion: 1` JSON
-- [ ] API key is absent from the export file
+- [ ] export produces valid `format: gpt-voice-input-settings`, `schemaVersion: 1` JSON
+- [ ] safe export never contains the API key
+- [ ] full backup contains the API key only after the plaintext warning
 - [ ] import round-trip reproduces the same effective configuration
+- [ ] import with `secrets.openAiApiKey` stores the key (no plaintext file kept)
+- [ ] import without `secrets` preserves the stored API key
 - [ ] malformed JSON produces a clear error and changes nothing
+- [ ] wrong `format` produces a clear error and changes nothing
 - [ ] unsupported (newer) schema version produces a clear error
+- [ ] invalid auto-stop / bad language/keyword types produce errors, no state change
 - [ ] imported profile affects the transcription configuration
-- [ ] importing does not erase the stored API key
-- [ ] import confirmation dialog summarizes before applying
+- [ ] Clear imported profile removes only the profile (key/auto-stop/terms stay)
+- [ ] Clear API key works and requires confirmation
 
-### Deployment profile
+### Runtime config vs. updates
 
-- [ ] release APK built by this repo contains the intended deployment profile
-      (verify: `unzip -l … | grep assets/local.json`)
-- [ ] a build without `GVI_DEPLOYMENT_CONFIG_BASE64` falls back to the generic
-      default (no `assets/local.json` in the APK)
+- [ ] imported profile, API key, custom terms and auto-stop survive an update
+      (v0.1.1 → next version, same package + certificate, installed over)
+- [ ] the public release APK contains only generic `default.json` — no personal
+      profile, no keywords, no API key (verify: `unzip -l … | grep assets/`)
+- [ ] changing `default.json` in a future release does not erase the imported
+      profile (covered by the `imported profile overrides a changed default`
+      unit test)
 
 ### Distribution
 

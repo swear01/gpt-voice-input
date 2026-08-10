@@ -62,11 +62,25 @@ happens through SwiftKey:
    Voice Typing so SwiftKey routes mic presses to the system speech recognizer.
 3. Open any text field.
 4. Tap SwiftKey's microphone button. Android launches GPT Voice Input.
-5. If no API key is configured yet, GPT Voice Input shows the no-key state.
-6. Tap **Open Settings** (or the ⚙ gear in the panel).
-7. Enter your OpenAI API key.
-8. Save and go back.
-9. Dictate. Tap the panel to submit, or wait for auto-stop.
+
+### Generic user
+
+5. Tap **Open Settings** (or the ⚙ gear in the panel).
+6. Enter your OpenAI API key.
+7. Save and go back.
+8. Dictate. Tap the panel to submit, or wait for auto-stop.
+
+### Personal-config user
+
+Instead of typing the API key on the phone, import a settings file that already
+contains your key and profile (see below):
+
+5. Tap **Open Settings** (or the ⚙ gear in the panel).
+6. Advanced → **Profile & backup → Import settings**.
+7. Choose your personal settings file (e.g. `gpt-voice-input-personal.json`).
+8. Confirm the summary. If the file contains an API key, no keyboard entry of
+   the key is necessary.
+9. Dictate.
 
 If Android shows a speech-recognizer chooser (some devices/SwiftKey builds do),
 select **GPT Voice Input** and choose *Always* if the OS offers that option.
@@ -96,37 +110,46 @@ raw PCM
   Cancel**; the already-recorded WAV is reused on retry. Ambiguous POST
   failures are never replayed automatically.
 
-## Configuration profiles
+## Configuration
 
-Transcription configuration is layered, each layer overriding the previous:
+Transcription configuration is layered:
 
 ```text
-1. config/default.json        generic public defaults (always shipped)
-2. config/local.json          deployment overlay (embedded at build time, optional)
-3. imported profile           Settings → Advanced → Import (runtime, on-device)
-4. custom terms               Settings → Advanced → Custom terms (runtime)
+1. generic default.json asset   neutral public defaults (always shipped)
+2. runtime imported profile     Settings → Advanced → Profile & backup →
+                                Import (persisted app-private, survives updates)
+3. runtime custom terms         Settings → Advanced → Custom terms
         ↓
    effective TranscriptionProfile sent to gpt-transcribe
 ```
 
-- `config/default.json` ships inside the APK with neutral, generic defaults
+- `default.json` ships inside the APK with neutral, generic defaults
   (Traditional Chinese/English code switching, neutral context, no keywords).
-- Deployments can overlay a personal profile at **build time**:
-  `cp config/personal.example.json config/local.json` (gitignored). CI injects
-  it via the `GVI_DEPLOYMENT_CONFIG_BASE64` secret instead of committing it.
-- A runtime **imported profile** (Settings → Advanced → Import) overrides
-  languages/context and merges keywords — useful to move a setup between
-  devices or to apply a fork's profile.
+  **The public release never contains personal profiles or API keys.**
+- The imported profile replaces the generic languages/context and replaces the
+  generic keyword list; custom terms are merged after and deduplicated.
+- Imported data (profile, API key, auto-stop, custom terms) lives in app-private
+  storage and survives ordinary updates (same package, same signing
+  certificate). Only an uninstall or data-clear removes it.
 
-**API keys never live in config** — they are entered at runtime in Settings and
-stored encrypted in the Android Keystore.
+**API keys never live in the APK or in config assets** — they are entered or
+imported at runtime and stored encrypted in the Android Keystore.
 
-### Settings import / export
+### Profile & backup (Settings → Advanced)
 
-Under **Settings → Advanced → Profile & settings** you can back up and restore
-the non-secret configuration: expected languages, transcription context,
-profile keywords, auto-stop, and custom terms. The file is `schemaVersion: 1`
-JSON. **API keys are intentionally excluded from backups.**
+| Action | Content | API key |
+|--------|---------|---------|
+| Import settings | restores profile, auto-stop, custom terms; may also import a key | optional |
+| Export settings | portable non-secret backup (`gpt-voice-input-settings.json`) | **never** |
+| Export full backup | personal backup (`gpt-voice-input-personal.json`) for moving to a new phone | **plaintext, warned** |
+| Clear imported profile | removes only the imported profile (key/auto-stop/terms stay) | — |
+
+Files are `schemaVersion: 1` JSON in the `gpt-voice-input-settings` format.
+Import is validated up front (JSON, format, schema version, language codes,
+auto-stop grid, types) and applied atomically after you confirm the summary.
+Newer unsupported schema versions are rejected with a clear message. The full
+backup warns before writing because it contains your OpenAI API key in
+plaintext — store it only in a private location.
 
 ### Keyword philosophy
 
@@ -165,10 +188,10 @@ unsigned (for local verification only — unsigned APKs won't install).
 
 **CI:** the workflow in `.github/workflows/release.yml` reads the signing
 secrets (`GVI_KEYSTORE_BASE64`, `GVI_STORE_PASSWORD`, `GVI_KEY_ALIAS`,
-`GVI_KEY_PASSWORD`), optionally injects the deployment profile from
-`GVI_DEPLOYMENT_CONFIG_BASE64`, runs unit tests + Android lint, builds,
-verifies the signature with `apksigner`, and attaches
-`gpt-voice-input-v<tag>.apk` to a GitHub Release.
+`GVI_KEY_PASSWORD`), runs unit tests + Android lint, builds, verifies the
+signature with `apksigner`, asserts the versionCode strictly increased, and
+attaches `gpt-voice-input-v<tag>.apk` to a GitHub Release. Releases are always
+**generic** — personal configuration is runtime data, never injected by CI.
 
 Keystores and passwords are **never** committed.
 
@@ -213,14 +236,13 @@ app/src/main/kotlin/org/gptvoiceinput/
 ├── audio/EndpointDetector.kt      WAITING_FOR_SPEECH → IN_SPEECH → ENDPOINT_CANDIDATE
 ├── audio/WavWriter.kt             44-byte RIFF writer (little-endian)
 ├── net/OpenAITranscriber.kt       gpt-transcribe multipart client (OkHttp)
-├── config/AppConfig.kt            default → deployment → imported → custom terms
+├── config/AppConfig.kt            default → imported profile → custom terms
 ├── config/SettingsStore.kt        auto-stop, custom terms
-├── config/ImportedProfileStore.kt runtime imported profile (non-secret)
-├── config/SettingsBackup.kt       schemaVersion-1 import/export + validation
+├── config/ImportedProfileStore.kt runtime imported profile (app-private)
+├── config/SettingsBackup.kt       versioned import/export + validation
 └── security/SecureApiKeyStore.kt  Android Keystore AES/GCM key storage
-config/
-├── default.json                   neutral public defaults (shipped)
-└── personal.example.json          deployment overlay example (copy → local.json)
+app/src/main/assets/
+└── default.json                   neutral generic defaults (the only shipped config)
 ```
 
 ## Testing
