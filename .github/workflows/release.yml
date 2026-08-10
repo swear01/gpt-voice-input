@@ -82,6 +82,29 @@ jobs:
           echo "APK versionCode=$VC expected=$GVI_VERSION_CODE"
           test "$VC" = "$GVI_VERSION_CODE"
 
+      - name: Assert versionCode strictly increased since last release
+        run: |
+          NEW_VC=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            app/build/outputs/apk/release/app-release.apk \
+            | grep -o "versionCode='[0-9]*'" | head -1 | grep -o '[0-9]*')
+          echo "new versionCode=$NEW_VC"
+          if gh release view latest --repo "${{ github.repository }}" --json tagName > /dev/null 2>&1; then
+            rm -rf /tmp/prev && mkdir -p /tmp/prev
+            gh release download latest --repo "${{ github.repository }}" \
+              --pattern '*.apk' -D /tmp/prev > /dev/null 2>&1 || {
+                echo "no previous APK asset; skipping check"; exit 0
+              }
+            PREV_APK=$(ls /tmp/prev/*.apk 2>/dev/null | head -1)
+            [ -n "$PREV_APK" ] || { echo "no previous APK asset; skipping check"; exit 0; }
+            OLD_VC=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$PREV_APK" \
+              | grep -o "versionCode='[0-9]*'" | head -1 | grep -o '[0-9]*')
+            echo "previous release versionCode=$OLD_VC"
+            test "$NEW_VC" -gt "$OLD_VC" \
+              || { echo "versionCode did not increase ($NEW_VC <= $OLD_VC)"; exit 1; }
+          else
+            echo "no previous release; this is the first one"
+          fi
+
       - name: Verify deployment profile asset in APK
         if: env.GVI_DEPLOYMENT_CONFIG_BASE64 != ''
         run: |
