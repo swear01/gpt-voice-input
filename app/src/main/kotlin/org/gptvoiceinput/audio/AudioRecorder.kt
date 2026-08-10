@@ -149,7 +149,15 @@ class AudioRecorder(
             if (filled == frameSamples) {
                 val elapsed = SystemClock.elapsedRealtime() - startRealtimeMs
                 wavWriter?.appendPcm(frame, frameSamples)
-                analyzeCopy(frame, frameSamples, r.sampleRate, elapsed)
+                // Hand the analysis pipeline a frame copy — the uploaded PCM
+                // never passes through analysis processing.
+                val analysisFrame = AudioFrame(
+                    samples = frame.copyOf(),
+                    sampleCount = frameSamples,
+                    sampleRate = r.sampleRate,
+                    elapsedMs = elapsed,
+                )
+                analyzeCopy(analysisFrame)
                 listener.onFrameCaptured(elapsed)
                 filled = 0
             }
@@ -157,12 +165,14 @@ class AudioRecorder(
     }
 
     /** Analysis side channel: copied frame only; upload audio untouched. */
-    private fun analyzeCopy(frame: ShortArray, count: Int, rate: Int, elapsedMs: Long) {
+    private fun analyzeCopy(frame: AudioFrame) {
         val vad = vad ?: return
         val endpoint = endpoint ?: return
 
         // Downsample the copy to the analysis rate (box averaging); never
         // resample the upload path.
+        val rate = frame.sampleRate
+        val count = frame.sampleCount
         val factor = (rate / ANALYSIS_RATE).coerceAtLeast(1)
         val outCount = count / factor
         if (outCount <= 0) return
@@ -171,11 +181,11 @@ class AudioRecorder(
         var i = 0
         while (i + factor <= count) {
             var acc = 0L
-            for (k in 0 until factor) acc += frame[i + k]
+            for (k in 0 until factor) acc += frame.samples[i + k]
             analysis[o++] = (acc / factor).toShort()
             i += factor
         }
-        endpoint.onFrame(vad.isSpeech(analysis, outCount), elapsedMs)
+        endpoint.onFrame(vad.isSpeech(analysis, outCount), frame.elapsedMs)
     }
 
     private fun postError(message: String) {
