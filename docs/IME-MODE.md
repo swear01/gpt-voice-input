@@ -94,6 +94,35 @@ Still below chat heads (documented limitation).
   points are complementary, not interchangeable.
 - No new permissions: still only `RECORD_AUDIO` + `INTERNET`.
 
+## Non-interference with daily typing (researched)
+
+Requirement: the voice IME may live in the keyboard-switcher cycle, but must
+never disturb normal typing with SwiftKey.
+
+Verified against AOSP `attrs.xml` / `InputMethodInfo` /
+`InputMethodManagerService`:
+
+- **Not running = zero interference.** When SwiftKey is active, our IME is not
+  selected and renders nothing. It only ever shows its UI when the user
+  switches to it.
+- **Voice-only surface.** No keys, no autocorrect/suggestions, no composing —
+  nothing that could hijack normal text input.
+- **Auto-return.** After `commitText` (or cancel), call
+  `switchToPreviousInputMethod()` (public API 28+) to hand control back to
+  SwiftKey, so the user is never stuck on a keyless IME.
+- **Escape hatch.** `android:supportsSwitchingToNextInputMethod="true"` + a
+  globe/switch button on the panel (`switchToNextInputMethod(false)`) so an
+  accidental switch is one tap away from returning.
+
+Optional hardening flags (researched; not chosen by default):
+
+- `android:showInInputMethodPicker="false"` removes the IME from the switcher
+  entirely — but then it can only be invoked from system settings, which
+  conflicts with the desired in-cycle availability.
+- `android:isAuxiliary="true"` marks it as supplementary (the Gboard-voice
+  pattern: invoked on demand, never a daily target) — not needed here since
+  we auto-return and expose the globe escape.
+
 ## Acceptance criteria
 
 - [ ] IME selectable; input view contains only the voice panel (no keys)
