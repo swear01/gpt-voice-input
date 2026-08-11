@@ -53,9 +53,13 @@ settings survive.
 
 ## First-time setup
 
-GPT Voice Input intentionally has **no launcher entry** — it behaves like a
-small system component, so you will not find it in the app drawer. Setup
-happens through SwiftKey:
+GPT Voice Input intentionally has **no app-drawer / launcher icon** — it behaves
+like a small system component, so you will not find it in the app drawer
+(ACTION_MAIN + CATEGORY_INFO is used for a package front door, never
+CATEGORY_LAUNCHER). Setup happens through SwiftKey:
+
+You can also open Settings from **Android Settings → Apps → GPT Voice Input →
+Open** on systems that expose that action.
 
 1. Install with Obtainium (above).
 2. In SwiftKey: **Settings → Voice typing** — disable SwiftKey's own Multimodal

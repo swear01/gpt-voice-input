@@ -31,13 +31,41 @@
             </intent-filter>
         </activity>
 
-        <!-- Settings are reachable only through the gear button in the
-             recognition panel (Settings → Apps also works). -->
+        <!--
+            Settings are reachable through the gear button in the recognition
+            panel, and through the package front-door alias below (Android
+            Settings → App info → Open on systems that expose that action).
+        -->
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
             android:theme="@style/Theme.GptVoiceInput.Settings" />
+
+        <!--
+            Package front door, NOT a launcher entry.
+
+            ACTION_MAIN + CATEGORY_INFO is Android's mechanism for a package
+            that needs an "Open" action (Settings / installer / package
+            managers) without appearing in the app drawer:
+            PackageManager.getLaunchIntentForPackage() queries CATEGORY_INFO
+            before falling back to CATEGORY_LAUNCHER, and launchers only show
+            CATEGORY_LAUNCHER activities.
+
+            The alias keeps SettingsActivity itself non-exported; external
+            access goes through this narrow front door only.
+        -->
+        <activity-alias
+            android:name=".SettingsFrontDoor"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.SettingsActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.INFO" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>
