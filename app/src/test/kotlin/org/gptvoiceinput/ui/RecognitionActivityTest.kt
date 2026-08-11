@@ -24,6 +24,12 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class RecognitionActivityTest {
 
+    @org.junit.Before
+    fun setUp() {
+        // The process-wide session guard is static; clear it between tests.
+        RecognitionActivity.resetSessionGuardForTest()
+    }
+
     @Test
     fun `recognition activity inflates without crashing`() {
         val controller = Robolectric.buildActivity(RecognitionActivity::class.java).setup()
@@ -65,5 +71,53 @@ class RecognitionActivityTest {
     fun `gear button exists inside the panel`() {
         val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
         assertNotNull(activity.findViewById<View>(R.id.gear_button))
+    }
+
+    // -------------------------------------------------------- mic level meter
+
+    @Test
+    fun `meter is hidden by default (not listening)`() {
+        val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
+        assertEquals(
+            View.GONE,
+            activity.findViewById<View>(R.id.mic_level_container).visibility,
+        )
+    }
+
+    @Test
+    fun `meter becomes visible when set visible and resets when hidden`() {
+        val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
+        activity.setMeterVisible(true)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.mic_level_container).visibility)
+
+        activity.renderMeter(0.5f)
+        assertEquals(0.5f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+
+        activity.setMeterVisible(false)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.mic_level_container).visibility)
+        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+    }
+
+    @Test
+    fun `renderMeter clamps NaN and out-of-range input`() {
+        val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
+        activity.setMeterVisible(true)
+        activity.renderMeter(Float.NaN)
+        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+        activity.renderMeter(1.5f)
+        assertEquals(1f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+        activity.renderMeter(-2f)
+        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+    }
+
+    @Test
+    fun `renderMeter updates an accessible level description`() {
+        val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
+        val container = activity.findViewById<View>(R.id.mic_level_container)
+        activity.setMeterVisible(true)
+        activity.renderMeter(0.02f)
+        assertTrue(container.contentDescription.toString().contains("quiet"))
+        activity.renderMeter(0.9f)
+        assertTrue(container.contentDescription.toString().contains("loud"))
     }
 }

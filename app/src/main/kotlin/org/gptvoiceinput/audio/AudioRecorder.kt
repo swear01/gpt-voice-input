@@ -39,7 +39,8 @@ class AudioRecorder(
 ) {
 
     interface Listener {
-        fun onFrameCaptured(elapsedMs: Long)
+        /** Called per captured frame; [level01] is a smoothed 0..1 mic level. */
+        fun onFrameCaptured(elapsedMs: Long, level01: Float)
         fun onEndOfSpeech()
         fun onNoSpeechTimeout()
         fun onMaxDuration()
@@ -54,6 +55,7 @@ class AudioRecorder(
     private var wavWriter: WavWriter? = null
     private var vad: VadProcessor? = null
     private var endpoint: EndpointDetector? = null
+    private var levelEstimator: MicLevelEstimator? = null
     private var startRealtimeMs = 0L
 
     val sampleRate: Int get() = record?.sampleRate ?: 0
@@ -71,12 +73,12 @@ class AudioRecorder(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            listener.onRecordingError("Microphone permission is required")
+            listener.onRecordingError(context.getString(org.gptvoiceinput.R.string.mic_permission_required))
             return false
         }
         return try {
             val chosen = openAudioRecord() ?: run {
-                listener.onRecordingError("Microphone unavailable on this device")
+                listener.onRecordingError(context.getString(org.gptvoiceinput.R.string.mic_unavailable))
                 return false
             }
             record = chosen.record
@@ -84,6 +86,7 @@ class AudioRecorder(
 
             wavWriter = WavWriter(wavFile, chosen.record.sampleRate)
             vad = VadProcessor(sampleRate = ANALYSIS_RATE)
+            levelEstimator = MicLevelEstimator()
             endpoint = EndpointDetector(
                 endpointDelayMs = endpointDelayMs,
                 noSpeechTimeoutMs = noSpeechTimeoutMs,
@@ -104,7 +107,12 @@ class AudioRecorder(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording", e)
             release()
-            listener.onRecordingError("Could not start recording (${e.message ?: "unknown error"})")
+            listener.onRecordingError(
+                context.getString(
+                    org.gptvoiceinput.R.string.mic_start_failed,
+                    e.message ?: "unknown error",
+                ),
+            )
             false
         }
     }
@@ -140,7 +148,7 @@ class AudioRecorder(
             if (n < 0) {
                 if (running) {
                     running = false
-                    postError("Microphone read failed")
+                    postError(context.getString(org.gptvoiceinput.R.string.mic_read_failed))
                 }
                 break
             }
@@ -158,16 +166,21 @@ class AudioRecorder(
                     elapsedMs = elapsed,
                 )
                 analyzeCopy(analysisFrame)
-                listener.onFrameCaptured(elapsed)
+                listener.onFrameCaptured(elapsed, lastLevel)
                 filled = 0
             }
         }
     }
 
+    /** Level reported for the latest frame (analysis side, visualization only). */
+    @Volatile
+    private var lastLevel: Float = 0f
+
     /** Analysis side channel: copied frame only; upload audio untouched. */
     private fun analyzeCopy(frame: AudioFrame) {
         val vad = vad ?: return
         val endpoint = endpoint ?: return
+        val estimator = levelEstimator ?: return
 
         // Downsample the copy to the analysis rate (box averaging); never
         // resample the upload path.
@@ -185,6 +198,7 @@ class AudioRecorder(
             analysis[o++] = (acc / factor).toShort()
             i += factor
         }
+        lastLevel = estimator.processFrame(analysis, outCount)
         endpoint.onFrame(vad.isSpeech(analysis, outCount), frame.elapsedMs)
     }
 
@@ -246,6 +260,7 @@ class AudioRecorder(
         wavWriter = null
         vad = null
         endpoint = null
+        levelEstimator = null
         thread = null
     }
 

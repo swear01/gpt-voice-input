@@ -13,4 +13,5 @@
 
     <color name="key_configured">#1E7A46</color>
     <color name="key_not_configured">#9AA7B4</color>
+    <color name="meter_fill">#2DD4BF</color>
 </resources>
