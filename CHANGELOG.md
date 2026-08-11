@@ -4,6 +4,17 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v0.1.7
+
+- **Fix quiet recordings**: the capture source now prefers
+  `VOICE_RECOGNITION` (platform-tuned for speech recognition, AGC on most
+  devices) with raw `UNPROCESSED` as fallback. Raw mic signals have no gain
+  and were too quiet for gpt-transcribe — observed on-device as a near-zero
+  meter and failed recognition. No effects are attached to the session.
+- **Privacy-safe level diagnostics**: each submission logs the chosen source
+  and the recorded WAV's peak/RMS in dBFS (numbers only, never audio
+  content) so quiet-input problems can be confirmed from logcat.
+
 ## v0.1.6
 
 - **Mic level meter rework (WebRTC-style)**: the meter now follows the

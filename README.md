@@ -17,10 +17,13 @@ press SwiftKey mic → speak → tap or auto-stop → GPT Transcribe → text ap
   transcription model, with free-form context, keyword hints, and multiple
   expected input languages.
 - **Raw audio to OpenAI** — the uploaded WAV is the least-processed signal
-  Android reasonably exposes (`UNPROCESSED` source when available, else
-  `VOICE_RECOGNITION`). No noise suppression, no AGC, no resampling on the
-  upload path. Audio processing (a light energy VAD) exists **only** on a
-  copied side channel for end-of-speech detection.
+  Android reasonably exposes while still being transcribable:
+  `VOICE_RECOGNITION` is preferred because the platform tunes it for speech
+  recognition (AGC on most devices); a raw `UNPROCESSED` signal has no gain
+  and is typically too quiet for gpt-transcribe (near-zero meter + failed
+  recognition on real devices). `UNPROCESSED` remains a fallback where
+  `VOICE_RECOGNITION` misbehaves. No effects (NoiseSuppressor etc.) are
+  attached to the session.
 - **Minimal interaction** — tap anywhere to submit; auto-stop is optional.
 - **Minimal footprint** — one Activity, a handful of classes; dependencies are
   AndroidX core, AppCompat, coroutines, OkHttp, and org.json.
@@ -94,7 +97,7 @@ select **GPT Voice Input** and choose *Always* if the OS offers that option.
 ```
 Microphone
     ↓
-AudioRecord (UNPROCESSED / VOICE_RECOGNITION)
+AudioRecord (VOICE_RECOGNITION / UNPROCESSED)
     ↓
 raw PCM
     ├──────────────────────────→ WAV → OpenAI gpt-transcribe

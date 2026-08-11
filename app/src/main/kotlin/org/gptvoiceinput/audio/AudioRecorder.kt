@@ -214,8 +214,13 @@ class AudioRecorder(
     @SuppressLint("MissingPermission")
     private fun openAudioRecord(): ChosenSource? {
         val sources = buildList {
-            if (supportsUnprocessed()) add(MediaRecorder.AudioSource.UNPROCESSED)
+            // VOICE_RECOGNITION first: the platform tunes this source for
+            // speech recognition (automatic gain control on most devices).
+            // Raw UNPROCESSED has no AGC and is often too quiet for ASR —
+            // observed on-device as a near-zero meter and failed
+            // transcription (gpt-transcribe expects normalized speech).
             add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+            if (supportsUnprocessed()) add(MediaRecorder.AudioSource.UNPROCESSED)
         }
         for (source in sources) {
             for (rate in SAMPLE_RATE_CANDIDATES) {

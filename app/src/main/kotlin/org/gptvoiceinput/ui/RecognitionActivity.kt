@@ -27,6 +27,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.gptvoiceinput.R
+import org.gptvoiceinput.audio.AudioLevelStats
 import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.config.AppConfig
 import org.gptvoiceinput.config.ImportedProfileStore
@@ -344,6 +345,7 @@ class RecognitionActivity : AppCompatActivity() {
         if (phase != Phase.LISTENING) return
         setPhase(Phase.PROCESSING)
 
+        val source = recorder?.sourceDescription
         try {
             recorder?.stopAndFinalize()
         } catch (e: Exception) {
@@ -353,6 +355,14 @@ class RecognitionActivity : AppCompatActivity() {
         }
         recorder = null
         wavReady = true
+
+        // Privacy-safe level diagnostics: numbers only, never audio content.
+        // Confirms whether the captured signal is too quiet for transcription.
+        val stats = AudioLevelStats.fromWav(tempWav)
+        Log.i(
+            TAG,
+            "record: source=$source peakDb=${stats?.peakDb ?: "n/a"} rmsDb=${stats?.rmsDb ?: "n/a"}",
+        )
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
             showRecordingError(getString(R.string.rec_error_no_audio))
