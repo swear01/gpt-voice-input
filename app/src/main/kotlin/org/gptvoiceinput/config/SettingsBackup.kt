@@ -177,6 +177,37 @@ object SettingsBackup {
         return kotlin.math.abs(steps - kotlin.math.round(steps)) < 1e-9
     }
 
+    /** Language-code validation shared by import parsing and the Settings UI. */
+    fun isValidLanguageCode(code: String): Boolean = VALID_LANGUAGE.matches(code)
+
+    /**
+     * Merges a parsed settings file into the current runtime profile, producing
+     * the single unified profile that will be persisted.
+     *
+     * - languages/context override when the file supplies them, else kept
+     * - keywords: the file's profile keywords + legacy custom terms are
+     *   unioned into ONE keyword list (deduplicated, order-preserving)
+     * - when the file has neither keywords nor custom terms, current keywords
+     *   are kept
+     */
+    fun mergeIntoCurrent(
+        current: TranscriptionProfile,
+        parsed: ParsedSettings,
+    ): TranscriptionProfile {
+        val languages = parsed.profile?.expectedLanguages
+            ?.takeIf { it.isNotEmpty() }
+            ?: current.expectedLanguages
+        val context = parsed.profile?.transcriptionContext
+            ?.takeIf { it.isNotBlank() }
+            ?: current.transcriptionContext
+        val keywords = if (parsed.profile != null || parsed.customTerms != null) {
+            (parsed.profile?.keywords.orEmpty() + parsed.customTerms.orEmpty()).distinct()
+        } else {
+            current.keywords
+        }
+        return TranscriptionProfile(languages, context, keywords)
+    }
+
     /** Same edge sanitization as the rest of the app (API rejects <,>,CR,LF). */
     fun sanitizeKeyword(raw: String): String =
         raw.replace(Regex("[<>\\r\\n]+"), " ").trim()

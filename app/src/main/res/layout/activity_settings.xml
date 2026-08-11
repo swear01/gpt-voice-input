@@ -78,6 +78,62 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Transcription -->
+        <TextView
+            style="@style/SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/section_transcription" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/languages_label" />
+
+        <EditText
+            android:id="@+id/languages_edit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/languages_hint"
+            android:inputType="text"
+            android:maxLines="1" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/context_label" />
+
+        <EditText
+            android:id="@+id/context_edit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="@string/context_hint"
+            android:inputType="textMultiLine"
+            android:minLines="4" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/keywords_label" />
+
+        <EditText
+            android:id="@+id/keywords_edit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="@string/keywords_hint"
+            android:inputType="textMultiLine"
+            android:minLines="4" />
+
         <!-- Recording -->
         <TextView
             style="@style/SectionHeader"
@@ -107,133 +163,78 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
-        <!-- Advanced -->
+        <!-- Profile & backup -->
+        <TextView
+            style="@style/SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/section_profile" />
+
         <LinearLayout
-            android:id="@+id/advanced_header"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="16dp"
-            android:background="?android:attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:id="@+id/import_row"
+            style="@style/ActionRow"
+            android:layout_marginTop="8dp">
 
             <TextView
-                style="@style/SectionHeader"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                style="@style/ActionRowLabel"
                 android:layout_weight="1"
-                android:text="@string/advanced" />
+                android:text="@string/import_settings" />
 
             <ImageView
-                android:id="@+id/advanced_chevron"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="@string/advanced_expand_description"
-                android:src="@drawable/ic_chevron"
-                app:tint="@color/primary" />
+                style="@style/ActionRowChevron"
+                android:contentDescription="@string/cd_chevron" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/advanced_panel"
+            android:id="@+id/export_row"
+            style="@style/ActionRow">
+
+            <TextView
+                style="@style/ActionRowLabel"
+                android:layout_weight="1"
+                android:text="@string/export_settings" />
+
+            <ImageView
+                style="@style/ActionRowChevron"
+                android:contentDescription="@string/cd_chevron" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/export_full_row"
+            style="@style/ActionRow">
+
+            <TextView
+                style="@style/ActionRowLabel"
+                android:layout_weight="1"
+                android:text="@string/export_full_backup" />
+
+            <ImageView
+                style="@style/ActionRowChevron"
+                android:contentDescription="@string/cd_chevron" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/reset_profile_row"
+            style="@style/ActionRow">
+
+            <TextView
+                style="@style/ActionRowLabel"
+                android:layout_weight="1"
+                android:text="@string/reset_transcription_profile" />
+
+            <ImageView
+                style="@style/ActionRowChevron"
+                android:contentDescription="@string/cd_chevron" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/FieldLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                style="@style/FieldLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/custom_terms_label" />
-
-            <EditText
-                android:id="@+id/custom_terms_edit"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="top"
-                android:hint="@string/custom_terms_hint"
-                android:inputType="textMultiLine"
-                android:minLines="4" />
-
-            <TextView
-                style="@style/FieldLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/effective_config_label" />
-
-            <TextView
-                android:id="@+id/effective_config_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:textIsSelectable="true"
-                android:textSize="12sp" />
-
-            <TextView
-                style="@style/SectionHeader"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="@string/section_profile" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/import_button"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:maxLines="2"
-                    android:text="@string/import_settings" />
-
-                <Button
-                    android:id="@+id/export_button"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:maxLines="2"
-                    android:text="@string/export_settings" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/export_full_button"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:maxLines="2"
-                    android:text="@string/export_full_backup" />
-
-                <Button
-                    android:id="@+id/clear_profile_button"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:maxLines="2"
-                    android:text="@string/clear_imported_profile" />
-            </LinearLayout>
-
-            <TextView
-                style="@style/FieldLabel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="@string/backup_excludes_api_key"
-                android:textSize="12sp" />
-        </LinearLayout>
+            android:layout_marginTop="10dp"
+            android:text="@string/backup_excludes_api_key"
+            android:textSize="12sp" />
 
     </LinearLayout>
 </ScrollView>

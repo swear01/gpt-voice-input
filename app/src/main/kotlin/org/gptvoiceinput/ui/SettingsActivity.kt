@@ -6,7 +6,6 @@ import android.text.InputType
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -23,18 +22,24 @@ import org.gptvoiceinput.config.ImportedProfileStore
 import org.gptvoiceinput.config.ParsedSettings
 import org.gptvoiceinput.config.SettingsBackup
 import org.gptvoiceinput.config.SettingsStore
+import org.gptvoiceinput.config.TranscriptionProfile
 import org.gptvoiceinput.security.SecureApiKeyStore
 import java.io.IOException
 
 /**
  * Settings reached only through the gear button in the recognition panel.
  *
- * - OpenAI API key: enter/replace, "key is set" hint, explicit Clear (never
- *   displays plaintext)
- * - auto-stop slider
- * - Advanced: custom terms, Effective Configuration, and Profile & backup:
- *   Import settings / Export settings (no key) / Export full backup (key in
- *   plaintext, warned) / Clear imported profile
+ * Four top-level sections:
+ * - OpenAI: API key (enter/replace/clear, never plaintext)
+ * - Transcription: Languages / Context / Keywords — the profile that is
+ *   ACTUALLY sent to the transcription API, directly editable
+ * - Recording: auto-stop slider
+ * - Profile & backup: Import / Export / Export full backup / Reset
+ *
+ * The editable transcription fields are the single source of truth for the
+ * runtime profile (ImportedProfileStore). Legacy `customTerms` from older
+ * versions are merged into the unified keyword list on load and cleared on
+ * the next save/import/reset.
  */
 class SettingsActivity : AppCompatActivity() {
 
@@ -45,13 +50,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var apiKeyEdit: EditText
     private lateinit var apiKeyStatus: TextView
     private lateinit var clearApiKeyButton: Button
+    private lateinit var languagesEdit: EditText
+    private lateinit var contextEdit: EditText
+    private lateinit var keywordsEdit: EditText
     private lateinit var autoStopSeekBar: SeekBar
     private lateinit var autoStopValue: TextView
-    private lateinit var advancedHeader: View
-    private lateinit var advancedChevron: ImageView
-    private lateinit var advancedPanel: View
-    private lateinit var customTermsEdit: EditText
-    private lateinit var effectiveConfigText: TextView
 
     private val importLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -79,13 +82,11 @@ class SettingsActivity : AppCompatActivity() {
         apiKeyEdit = findViewById(R.id.api_key_edit)
         apiKeyStatus = findViewById(R.id.api_key_status)
         clearApiKeyButton = findViewById(R.id.clear_api_key_button)
+        languagesEdit = findViewById(R.id.languages_edit)
+        contextEdit = findViewById(R.id.context_edit)
+        keywordsEdit = findViewById(R.id.keywords_edit)
         autoStopSeekBar = findViewById(R.id.auto_stop_seekbar)
         autoStopValue = findViewById(R.id.auto_stop_value)
-        advancedHeader = findViewById(R.id.advanced_header)
-        advancedChevron = findViewById(R.id.advanced_chevron)
-        advancedPanel = findViewById(R.id.advanced_panel)
-        customTermsEdit = findViewById(R.id.custom_terms_edit)
-        effectiveConfigText = findViewById(R.id.effective_config_text)
 
         applySystemBarInsets()
 
@@ -98,7 +99,6 @@ class SettingsActivity : AppCompatActivity() {
         autoStopSeekBar.max = options.size - 1
         autoStopSeekBar.progress = indexOfCurrent(options)
         renderAutoStop(options)
-
         autoStopSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 renderAutoStop(options)
@@ -108,26 +108,14 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
         })
 
-        // Restore saved runtime custom terms (regression: v0.1.0 left this blank).
-        customTermsEdit.setText(settingsStore.customTerms().joinToString("\n"))
-
-        // Advanced expand/collapse with chevron + accessibility state.
-        advancedHeader.setOnClickListener {
-            setAdvancedExpanded(advancedPanel.visibility != View.VISIBLE)
-        }
-        setAdvancedExpanded(savedInstanceState?.getBoolean(KEY_ADVANCED_EXPANDED) == true)
+        populateTranscriptionFields()
 
         findViewById<View>(R.id.save_button).setOnClickListener { save() }
-        findViewById<View>(R.id.import_button).setOnClickListener { startImport() }
-        findViewById<View>(R.id.export_button).setOnClickListener { startExport() }
-        findViewById<View>(R.id.export_full_button).setOnClickListener { startFullBackup() }
-        findViewById<View>(R.id.clear_profile_button).setOnClickListener { confirmClearProfile() }
         clearApiKeyButton.setOnClickListener { confirmClearApiKey() }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean(KEY_ADVANCED_EXPANDED, advancedPanel.visibility == View.VISIBLE)
+        findViewById<View>(R.id.import_row).setOnClickListener { startImport() }
+        findViewById<View>(R.id.export_row).setOnClickListener { startExport() }
+        findViewById<View>(R.id.export_full_row).setOnClickListener { startFullBackup() }
+        findViewById<View>(R.id.reset_profile_row).setOnClickListener { confirmResetProfile() }
     }
 
     /** Edge-to-edge (targetSdk 35): keep content below the status bar / above the nav bar. */
@@ -138,16 +126,6 @@ class SettingsActivity : AppCompatActivity() {
             v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
-    }
-
-    private fun setAdvancedExpanded(expanded: Boolean) {
-        advancedPanel.visibility = if (expanded) View.VISIBLE else View.GONE
-        advancedChevron.rotation = if (expanded) 180f else 0f
-        advancedChevron.contentDescription = getString(
-            if (expanded) R.string.advanced_collapse_description
-            else R.string.advanced_expand_description,
-        )
-        if (expanded) renderEffectiveConfig()
     }
 
     // ---------------------------------------------------------------- key
@@ -199,53 +177,71 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ------------------------------------------------------------- config
+    // -------------------------------------------------------- transcription
 
-    private fun effectiveProfile() =
-        AppConfig.load(this, importedProfileStore.load(), parseTerms())
-
-    private fun renderEffectiveConfig() {
-        val profile = effectiveProfile()
-        val languages = profile.expectedLanguages.joinToString(", ")
-        effectiveConfigText.text = buildString {
-            appendLine(getString(R.string.effective_languages, languages))
-            appendLine()
-            append(profile.transcriptionContext)
-            appendLine()
-            appendLine()
-            if (profile.keywords.isNotEmpty()) {
-                append(getString(R.string.effective_keywords, profile.keywords.joinToString(", ")))
-            }
-        }
-    }
-
-    private fun parseTerms(): List<String> =
-        customTermsEdit.text?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toList()
-            .orEmpty()
-
-    /** The profile layer for export: imported profile if any, else the generic default. */
-    private fun exportProfile() =
+    /** The persisted runtime profile, or the generic default when none exists. */
+    private fun baseProfile(): TranscriptionProfile =
         importedProfileStore.load() ?: AppConfig.loadDefault(this)
 
-    private fun exportData(): ExportData = ExportData(
-        profile = exportProfile(),
-        autoStopSeconds = settingsStore.autoStopSeconds,
-        customTerms = settingsStore.customTerms(),
-    )
+    /**
+     * Loads the editable transcription fields from the persisted state.
+     * Legacy customTerms (pre-unification) are merged into the keyword field
+     * for migration display — the field is the single visible concept.
+     */
+    private fun populateTranscriptionFields() {
+        val base = baseProfile()
+        val legacyTerms = settingsStore.customTerms()
+        val keywords = (base.keywords + legacyTerms).distinct()
+        languagesEdit.setText(base.expectedLanguages.joinToString(", "))
+        contextEdit.setText(base.transcriptionContext)
+        keywordsEdit.setText(keywords.joinToString("\n"))
+    }
 
-    // ---------------------------------------------------------------- save
+    /** Splits/trims/deduplicates the languages field; null when invalid. */
+    private fun parseLanguages(): List<String>? {
+        val raw = languagesEdit.text?.toString().orEmpty()
+        val parts = raw.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (parts.isEmpty()) {
+            toastValidation(getString(R.string.languages_empty))
+            return null
+        }
+        val invalid = parts.firstOrNull { !SettingsBackup.isValidLanguageCode(it) }
+        if (invalid != null) {
+            toastValidation(getString(R.string.languages_invalid, invalid))
+            return null
+        }
+        return parts.distinct()
+    }
 
+    private fun parseKeywords(): List<String> =
+        keywordsEdit.text?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toList()
+            .orEmpty()
+
+    /**
+     * Saves all sections atomically. Validate every transcription field first;
+     * on validation failure nothing is persisted.
+     */
     private fun save() {
+        val languages = parseLanguages() ?: return
+
         val key = apiKeyEdit.text?.toString()?.trim().orEmpty()
+        val context = contextEdit.text?.toString()?.trim().orEmpty()
+        val keywords = parseKeywords()
+
+        // Commit: key (only when entered; empty preserves), unified profile,
+        // auto-stop, and migrate the legacy customTerms away.
         if (key.isNotEmpty()) {
             secureStore.save(key)
             apiKeyEdit.text?.clear()
             updateApiKeyHint()
         }
-        // An empty API-key field preserves the already stored key (no-op).
+        importedProfileStore.save(TranscriptionProfile(languages, context, keywords))
+        settingsStore.setCustomTerms(emptyList())
         settingsStore.autoStopSeconds = SettingsStore.AUTO_STOP_OPTIONS[autoStopSeekBar.progress]
-        settingsStore.setCustomTerms(parseTerms())
-        renderEffectiveConfig()
+
+        populateTranscriptionFields()
         Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show()
     }
 
@@ -276,39 +272,27 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showImportConfirm(parsed: ParsedSettings) {
         val unchanged = getString(R.string.import_confirm_unchanged)
-        val profile = parsed.profile
+        val hasProfile = parsed.profile != null
+        val hasTerms = parsed.customTerms != null
+        val mergedKeywordCount = (parsed.profile?.keywords.orEmpty() + parsed.customTerms.orEmpty())
+            .distinct().size
+
         val summary = buildString {
             appendLine(
                 getString(
                     R.string.import_confirm_languages,
-                    profile?.expectedLanguages?.joinToString(", ")?.ifEmpty { "—" } ?: unchanged,
+                    parsed.profile?.expectedLanguages?.joinToString(", ")?.ifEmpty { "—" } ?: unchanged,
                 ),
             )
             appendLine(
-                getString(
-                    R.string.import_confirm_keywords,
-                    profile?.keywords?.size ?: -1,
-                ).let {
-                    if (profile == null) getString(R.string.import_confirm_keywords_unchanged) else it
+                if (hasProfile || hasTerms) {
+                    getString(R.string.import_confirm_keywords, mergedKeywordCount)
+                } else {
+                    getString(R.string.import_confirm_keywords_unchanged)
                 },
             )
             appendLine(
-                getString(
-                    R.string.import_confirm_auto_stop,
-                    formatAutoStop(parsed.autoStopSeconds),
-                ),
-            )
-            appendLine(
-                getString(
-                    R.string.import_confirm_custom_terms,
-                    parsed.customTerms?.size ?: -1,
-                ).let {
-                    if (parsed.customTerms == null) {
-                        getString(R.string.import_confirm_custom_terms_unchanged)
-                    } else {
-                        it
-                    }
-                },
+                getString(R.string.import_confirm_auto_stop, formatAutoStop(parsed.autoStopSeconds)),
             )
             append(
                 if (parsed.apiKey != null) {
@@ -334,19 +318,20 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /** Commit only after confirmation; invalid files never reach this point. */
-    private fun applyImport(parsed: ParsedSettings) {
+    internal fun applyImport(parsed: ParsedSettings) {
         parsed.apiKey?.let { secureStore.save(it) }
-        parsed.profile?.let { importedProfileStore.save(it) }
+        // Unify: file profile keywords + legacy file custom terms -> one list.
+        val merged = SettingsBackup.mergeIntoCurrent(baseProfile(), parsed)
+        importedProfileStore.save(merged)
+        settingsStore.setCustomTerms(emptyList())
         parsed.autoStopSeconds?.let { settingsStore.autoStopSeconds = it }
-        parsed.customTerms?.let { settingsStore.setCustomTerms(it) }
 
-        // Refresh every field from the stores so the UI mirrors persisted state.
+        // Refresh every visible field so the user sees the imported state.
         updateApiKeyHint()
         val options = SettingsStore.AUTO_STOP_OPTIONS
         autoStopSeekBar.progress = indexOfCurrent(options)
         renderAutoStop(options)
-        customTermsEdit.setText(settingsStore.customTerms().joinToString("\n"))
-        renderEffectiveConfig()
+        populateTranscriptionFields()
 
         Toast.makeText(this, R.string.settings_imported, Toast.LENGTH_LONG).show()
     }
@@ -374,6 +359,13 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Unified profile export: keywords carry the full list; no legacy duplicate state. */
+    private fun exportData(): ExportData = ExportData(
+        profile = baseProfile(),
+        autoStopSeconds = settingsStore.autoStopSeconds,
+        customTerms = emptyList(),
+    )
+
     private fun exportTo(uri: Uri, includeApiKey: Boolean) {
         try {
             val data = if (includeApiKey) {
@@ -391,19 +383,31 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------------------------------- clear profile
+    // ------------------------------------------------------- reset profile
 
-    private fun confirmClearProfile() {
+    private fun confirmResetProfile() {
         AlertDialog.Builder(this)
-            .setTitle(R.string.clear_profile_confirm_title)
-            .setMessage(R.string.clear_profile_confirm_message)
+            .setTitle(R.string.reset_profile_confirm_title)
+            .setMessage(R.string.reset_profile_confirm_message)
             .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.clear_imported_profile) { _, _ ->
-                importedProfileStore.clear()
-                renderEffectiveConfig()
-                Toast.makeText(this, R.string.imported_profile_cleared, Toast.LENGTH_SHORT).show()
+            .setPositiveButton(R.string.reset_transcription_profile) { _, _ ->
+                performResetProfile()
             }
             .show()
+    }
+
+    /** Removes the runtime profile override + migrated legacy terms; keeps key and auto-stop. */
+    internal fun performResetProfile() {
+        importedProfileStore.clear()
+        settingsStore.setCustomTerms(emptyList())
+        populateTranscriptionFields()
+        Toast.makeText(this, R.string.profile_reset, Toast.LENGTH_SHORT).show()
+    }
+
+    // -------------------------------------------------------------- helpers
+
+    private fun toastValidation(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     private fun toastImportError(message: String) {
@@ -425,6 +429,5 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         private const val SAFE_EXPORT_FILENAME = "gpt-voice-input-settings.json"
         private const val FULL_BACKUP_FILENAME = "gpt-voice-input-personal.json"
-        private const val KEY_ADVANCED_EXPANDED = "advanced_expanded"
     }
 }
