@@ -16,89 +16,99 @@ class MicLevelEstimatorTest {
         return samples
     }
 
-    @Test
-    fun `all-zero frame is floor minimum`() {
-        val estimator = MicLevelEstimator()
-        val level = estimator.processFrame(ShortArray(320), 320)
-        assertEquals(0f, level, 0.0001f)
+    private val silent = ShortArray(320)
+
+    private fun feed(estimator: MicLevelEstimator, frames: Int, frame: ShortArray) {
+        repeat(frames) { estimator.processFrame(frame, frame.size) }
     }
 
     @Test
-    fun `low amplitude maps to a low level`() {
+    fun `all-zero input stays at floor minimum`() {
         val estimator = MicLevelEstimator()
-        // amplitude 300 → ≈ -43.8 dBFS → ≈ 0.12 normalized (first frame ~0.09)
-        val level = estimator.processFrame(sineFrame(amplitude = 300), 320)
-        assertTrue("low level expected, got $level", level in 0.01f..0.4f)
+        feed(estimator, 24, silent)
+        assertEquals(0f, estimator.currentLevel(), 0.0001f)
+    }
+
+    @Test
+    fun `low amplitude maps to a low visible level`() {
+        val estimator = MicLevelEstimator()
+        // amplitude 1000 -> peak ≈ -30 dBFS -> ≈ 0.24 normalized.
+        feed(estimator, 24, sineFrame(amplitude = 1000))
+        assertTrue(
+            "low level expected, got ${estimator.currentLevel()}",
+            estimator.currentLevel() in 0.05f..0.45f,
+        )
     }
 
     @Test
     fun `larger amplitude is strictly higher`() {
-        val quiet = MicLevelEstimator().processFrame(sineFrame(amplitude = 300), 320)
-        val loud = MicLevelEstimator().processFrame(sineFrame(amplitude = 8000), 320)
+        val quiet = MicLevelEstimator().let {
+            feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
+        }
+        val loud = MicLevelEstimator().let {
+            feed(it, 24, sineFrame(amplitude = 8000)); it.currentLevel()
+        }
         assertTrue("loud must exceed quiet ($loud vs $quiet)", loud > quiet)
     }
 
     @Test
     fun `clipping max PCM stays bounded at the maximum`() {
         val estimator = MicLevelEstimator()
-        repeat(5) { estimator.processFrame(sineFrame(amplitude = 32767), 320) }
-        val level = estimator.processFrame(ShortArray(320) { Short.MAX_VALUE }, 320)
+        feed(estimator, 30, ShortArray(320) { Short.MAX_VALUE })
+        val level = estimator.currentLevel()
         assertTrue(level <= 1f)
-        assertTrue(level > 0.9f)
+        assertTrue("near-full-scale should read high, got $level", level > 0.9f)
     }
 
     @Test
-    fun `no NaN or infinity escapes to the UI`() {
+    fun `no NaN or infinity escapes`() {
         val estimator = MicLevelEstimator()
-        estimator.processFrame(ShortArray(0), 0)
-        estimator.processFrame(sineFrame(amplitude = 0), 320)
+        feed(estimator, 30, sineFrame(amplitude = 3000))
+        feed(estimator, 30, silent)
+        assertTrue(estimator.currentLevel().isFinite())
+        assertTrue(estimator.currentLevel() in 0f..1f)
+    }
+
+    @Test
+    fun `peak is held then decays in silence - classic meter fall`() {
+        val estimator = MicLevelEstimator()
+        feed(estimator, 12, sineFrame(amplitude = 8000))
+        val afterSpeech = estimator.currentLevel()
+        assertTrue("speech should raise the meter, got $afterSpeech", afterSpeech > 0.4f)
+
+        // Silence: the held peak decays each emission; level must fall
+        // monotonically and settle near the floor.
+        var previous = afterSpeech
+        var monotonic = true
         repeat(10) {
-            val v = estimator.processFrame(sineFrame(amplitude = 1000), 320)
-            assertTrue("level must be finite: $v", v.isFinite())
-            assertTrue(v in 0f..1f)
+            feed(estimator, 6, silent)
+            val now = estimator.currentLevel()
+            if (now > previous + 0.0001f) monotonic = false
+            previous = now
         }
+        assertTrue("meter must not rise in silence", monotonic)
+        assertTrue("meter must settle near floor, got $previous", previous < 0.05f)
     }
 
     @Test
-    fun `attack is fast and release is slower`() {
+    fun `display smoothing converges toward steady input`() {
         val estimator = MicLevelEstimator()
-        val loud = sineFrame(amplitude = 8000)
-        val silent = ShortArray(320)
-
-        // Rise quickly from silence (first loud frame ≈ 0.49).
-        val first = estimator.processFrame(loud, 320)
-        assertTrue("fast attack expected, got $first", first > 0.4f)
-
-        // Decay should be a fraction of the rise per frame.
-        estimator.processFrame(silent, 320)
-        val afterOneSilent = estimator.currentLevel()
-        assertTrue("slow release expected", afterOneSilent > first * 0.4f)
-        estimator.processFrame(silent, 320)
-        val afterTwoSilent = estimator.currentLevel()
-        assertTrue("release must decay monotonically", afterTwoSilent < afterOneSilent)
-        assertTrue("release must stay above floor briefly", afterTwoSilent > 0.1f)
-    }
-
-    @Test
-    fun `smoothing converges toward steady input`() {
-        val estimator = MicLevelEstimator()
-        val loud = sineFrame(amplitude = 8000)
         var previous = 0f
         var converged = false
-        repeat(30) {
-            val v = estimator.processFrame(loud, 320)
-            if (kotlin.math.abs(v - previous) < 0.0005f) converged = true
-            previous = v
+        repeat(24) {
+            feed(estimator, 6, sineFrame(amplitude = 8000))
+            val now = estimator.currentLevel()
+            if (kotlin.math.abs(now - previous) < 0.0005f) converged = true
+            previous = now
         }
         assertTrue("level should converge", converged)
-        // amplitude 8000 → ≈ 0.7 normalized; converges near that.
-        assertTrue("steady level below max, got $previous", previous > 0.6f)
+        assertTrue("steady loud level, got $previous", previous > 0.5f)
     }
 
     @Test
     fun `reset returns level to zero`() {
         val estimator = MicLevelEstimator()
-        estimator.processFrame(sineFrame(amplitude = 8000), 320)
+        feed(estimator, 12, sineFrame(amplitude = 8000))
         assertTrue(estimator.currentLevel() > 0f)
         estimator.reset()
         assertEquals(0f, estimator.currentLevel(), 0.0001f)

@@ -58,7 +58,7 @@ class RecognitionActivity : AppCompatActivity() {
     private lateinit var gearButton: ImageButton
     private lateinit var micIcon: View
     private lateinit var meterContainer: View
-    private lateinit var meterFill: View
+    private lateinit var meterBars: List<View>
     private lateinit var processingBar: ProgressBar
     private lateinit var statusText: TextView
     private lateinit var hintText: TextView
@@ -116,7 +116,9 @@ class RecognitionActivity : AppCompatActivity() {
         gearButton = findViewById(R.id.gear_button)
         micIcon = findViewById(R.id.mic_icon)
         meterContainer = findViewById(R.id.mic_level_container)
-        meterFill = findViewById(R.id.mic_level_fill)
+        meterBars = (meterContainer as android.view.ViewGroup).let { vg ->
+            (0 until vg.childCount).map { vg.getChildAt(it) }
+        }
         processingBar = findViewById(R.id.processing_bar)
         statusText = findViewById(R.id.status_text)
         hintText = findViewById(R.id.hint_text)
@@ -130,9 +132,8 @@ class RecognitionActivity : AppCompatActivity() {
         panelView.setOnClickListener {
             if (phase == Phase.LISTENING) submit()
         }
-        // The meter fill scales horizontally from the left edge (no relayout).
-        meterFill.pivotX = 0f
-        meterFill.pivotY = meterFill.height / 2f
+        // Bars start dim; they light progressively with input level.
+        meterBars.forEach { it.alpha = BAR_DIM_ALPHA }
 
         inspectIncomingIntent(intent)
         val owner = sessionOwner
@@ -533,12 +534,13 @@ class RecognitionActivity : AppCompatActivity() {
 
     /**
      * Live microphone input meter (LISTENING only). Visualizes the analysis-side
-     * level; never touches the upload path.
+     * level as a segmented bar meter (WebRTC-style peak estimate); never
+     * touches the upload path.
      */
     internal fun setMeterVisible(visible: Boolean) {
         meterContainer.visibility = if (visible) View.VISIBLE else View.GONE
         if (!visible) {
-            meterFill.scaleX = 0f
+            meterBars.forEach { it.alpha = BAR_DIM_ALPHA }
             meterContainer.contentDescription = getString(R.string.mic_level_desc)
         }
     }
@@ -547,8 +549,18 @@ class RecognitionActivity : AppCompatActivity() {
         // The meter is only visible in LISTENING (setPhase drives visibility).
         if (meterContainer.visibility != View.VISIBLE) return
         val level = if (level01.isNaN()) 0f else level01.coerceIn(0f, 1f)
-        meterFill.scaleX = level
-        meterFill.alpha = 0.45f + 0.55f * level
+        val n = meterBars.size
+        val lit = (level * n).toInt().coerceIn(0, n)
+        val frac = (level * n - lit).coerceIn(0f, 1f)
+        for ((idx, bar) in meterBars.withIndex()) {
+            val target = when {
+                idx < lit -> 1f
+                idx == lit && idx < n -> BAR_DIM_ALPHA + frac * (1f - BAR_DIM_ALPHA)
+                else -> BAR_DIM_ALPHA
+            }
+            // Per-frame lerp gives a smooth bobbing animation without layout.
+            bar.alpha += (target - bar.alpha) * BAR_SMOOTHING
+        }
         meterContainer.contentDescription = getString(
             R.string.mic_level_desc,
             getString(
@@ -618,5 +630,9 @@ class RecognitionActivity : AppCompatActivity() {
 
         /** ~30 fps meter updates (33 ms); frames arrive every 20 ms. */
         private const val METER_UI_INTERVAL_MS = 33L
+
+        /** Unlit bar alpha and the per-frame animation smoothing. */
+        private const val BAR_DIM_ALPHA = 0.12f
+        private const val BAR_SMOOTHING = 0.35f
     }
 }

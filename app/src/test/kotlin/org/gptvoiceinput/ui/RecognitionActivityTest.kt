@@ -84,30 +84,52 @@ class RecognitionActivityTest {
         )
     }
 
+    private fun bars(activity: RecognitionActivity): List<View> {
+        val container = activity.findViewById<android.view.ViewGroup>(R.id.mic_level_container)
+        return (0 until container.childCount).map { container.getChildAt(it) }
+    }
+
     @Test
     fun `meter becomes visible when set visible and resets when hidden`() {
         val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
         activity.setMeterVisible(true)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.mic_level_container).visibility)
 
-        activity.renderMeter(0.5f)
-        assertEquals(0.5f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
-
         activity.setMeterVisible(false)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.mic_level_container).visibility)
-        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+        // Bars are reset to the dim state when hidden.
+        bars(activity).forEach { assertEquals(0.12f, it.alpha, 0.01f) }
     }
 
     @Test
-    fun `renderMeter clamps NaN and out-of-range input`() {
+    fun `bars light progressively with level`() {
+        val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
+        val meterBars = bars(activity)
+        activity.setMeterVisible(true)
+        // Let the animation converge on a mid level: first bars bright, rest dim.
+        repeat(20) { activity.renderMeter(0.5f) }
+        val mid = (0.5f * meterBars.size).toInt()
+        meterBars.take(mid).forEach { assertTrue("lit bar should be bright", it.alpha > 0.8f) }
+        // Bars beyond the partial boundary bar are unlit.
+        meterBars.drop(mid + 1).forEach { assertTrue("unlit bar should be dim", it.alpha < 0.5f) }
+    }
+
+    @Test
+    fun `renderMeter handles NaN and out-of-range input`() {
         val activity = Robolectric.buildActivity(RecognitionActivity::class.java).setup().get()
         activity.setMeterVisible(true)
+        val meterBars = bars(activity)
+        // NaN must not escape; no exception, bars stay dim.
         activity.renderMeter(Float.NaN)
-        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
-        activity.renderMeter(1.5f)
-        assertEquals(1f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
-        activity.renderMeter(-2f)
-        assertEquals(0f, activity.findViewById<View>(R.id.mic_level_fill).scaleX, 0.001f)
+        repeat(10) { activity.renderMeter(Float.NaN) }
+        meterBars.forEach { assertTrue("alpha must be finite", it.alpha.isFinite()) }
+        assertTrue(meterBars.all { it.alpha < 0.5f })
+        // Above-range input drives the meter to full brightness.
+        repeat(20) { activity.renderMeter(2f) }
+        meterBars.forEach { assertTrue(it.alpha > 0.9f) }
+        // Below-range input drives it back down.
+        repeat(20) { activity.renderMeter(-1f) }
+        meterBars.forEach { assertTrue(it.alpha < 0.5f) }
     }
 
     @Test

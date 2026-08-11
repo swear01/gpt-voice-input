@@ -4,6 +4,16 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v0.1.6
+
+- **Mic level meter rework (WebRTC-style)**: the meter now follows the
+  industry-standard WebRTC `AudioLevel` algorithm — peak amplitude with
+  hold-and-decay (emitted ~8×/s, hold divided by 4) instead of RMS, mapped
+  from dBFS over a -40 dB floor so quiet/normal/loud speech spreads across the
+  meter. UI changed to a segmented 7-bar meter that lights progressively with
+  a smooth bobbing animation (per-frame lerp, no layout churn), still ~30 fps
+  and analysis-side only.
+
 ## v0.1.5
 
 - **Auto-stop persistence (#7)**: auto-stop is now stored as exact integer

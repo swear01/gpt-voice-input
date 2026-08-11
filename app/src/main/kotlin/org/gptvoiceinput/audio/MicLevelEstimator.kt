@@ -1,63 +1,90 @@
 package org.gptvoiceinput.audio
 
+import kotlin.math.abs
 import kotlin.math.log10
-import kotlin.math.sqrt
 
 /**
  * Non-destructive microphone input level estimator — visualization only.
  *
- * Computes RMS from the analysis-side (copied) PCM frame, maps dBFS into a
- * normalized 0..1 range over a fixed floor, and applies attack/release
- * smoothing so the meter reads cleanly: fast rise on speech, slower decay in
- * silence.
+ * Reference implementation: WebRTC `AudioLevel` (voe::AudioLevel), the same
+ * algorithm behind W3C WebRTC-stats audio level. Key ideas reused:
+ *
+ *  - **peak amplitude** per frame (not RMS) — matches how meters present
+ *    "signal level"; RMS sits mid-range and reads too low,
+ *  - **peak hold with decay**: the frame peak is held; every
+ *    [HOLD_FRAMES] frames the held peak is emitted and then decayed, so the
+ *    meter jumps up on speech and falls off smoothly in silence,
+ *  - the emitted peak is converted to dBFS and normalized over a usable
+ *    floor (here -40 dBFS), giving a good spread across quiet speech
+ *    (~0.1), normal speech (~0.5) and loud speech (~0.75+).
  *
  * The uploaded WAV never passes through this; the estimator is fed only the
  * downsampled analysis copy (see AudioRecorder).
  */
 class MicLevelEstimator(
-    /** dBFS below which the meter sits at minimum. */
+    /** dBFS below which the meter reads zero (peak-based). */
     private val floorDb: Float = DEFAULT_FLOOR_DB,
-    /** Smoothing when the signal is rising (fast). */
+    /** Emission cadence in 20 ms frames (~100-120 ms, like WebRTC's ~9 Hz). */
+    private val holdFrames: Int = DEFAULT_HOLD_FRAMES,
+    /** Decay factor applied to the held peak after each emission (WebRTC: >>=2). */
+    private val holdDecay: Float = DEFAULT_HOLD_DECAY,
+    /** Display smoothing toward the emitted value (rising). */
     private val attack: Float = DEFAULT_ATTACK,
-    /** Smoothing when the signal is falling (slower, readable). */
+    /** Display smoothing toward the emitted value (falling). */
     private val release: Float = DEFAULT_RELEASE,
 ) {
 
-    private var level: Float = 0f
+    private var holdPeak = 0f // held linear peak, 0..1
+    private var holdCount = 0
+    private var level = 0f // smoothed display level, 0..1
 
     /** Feeds one PCM frame; returns the smoothed normalized level in 0..1. */
     fun processFrame(samples: ShortArray, count: Int): Float {
         require(count in 0..samples.size)
-        var sumSq = 0.0
+        var peak = 0
         var i = 0
         while (i < count) {
-            val v = samples[i].toDouble()
-            sumSq += v * v
+            val v = abs(samples[i].toInt())
+            if (v > peak) peak = v
             i++
         }
-        val target = if (count <= 0 || sumSq <= 0.0) {
-            0f
-        } else {
-            val rms = sqrt(sumSq / count)
-            val db = 20.0 * log10(rms / MAX_PCM_AMPLITUDE)
-            ((db - floorDb) / -floorDb).toFloat().coerceIn(0f, 1f)
+        if (peak > 0) {
+            val frameLevel = (peak / MAX_PCM_AMPLITUDE).toFloat()
+            if (frameLevel > holdPeak) holdPeak = frameLevel
         }
-        val alpha = if (target >= level) attack else release
-        level = level + alpha * (target - level)
+        holdCount++
+        if (holdCount >= holdFrames) {
+            holdCount = 0
+            val emitted = holdPeak
+            holdPeak *= holdDecay // decay the hold (WebRTC divides by 4)
+            val target = dbToLevel(emitted)
+            val alpha = if (target >= level) attack else release
+            level = level + (target - level) * alpha
+        }
         return level
+    }
+
+    private fun dbToLevel(linear: Float): Float {
+        if (linear <= 0f) return 0f
+        val db = 20.0 * log10(linear.toDouble())
+        return ((db - floorDb) / -floorDb).toFloat().coerceIn(0f, 1f)
     }
 
     /** Current smoothed level without consuming a frame. */
     fun currentLevel(): Float = level
 
     fun reset() {
+        holdPeak = 0f
+        holdCount = 0
         level = 0f
     }
 
     companion object {
         private const val MAX_PCM_AMPLITUDE = 32768.0
-        private const val DEFAULT_FLOOR_DB = -50f
-        private const val DEFAULT_ATTACK = 0.7f
-        private const val DEFAULT_RELEASE = 0.25f
+        private const val DEFAULT_FLOOR_DB = -40f
+        private const val DEFAULT_HOLD_FRAMES = 6 // ~120 ms at 20 ms frames
+        private const val DEFAULT_HOLD_DECAY = 0.25f // WebRTC's >>= 2
+        private const val DEFAULT_ATTACK = 0.5f
+        private const val DEFAULT_RELEASE = 0.3f
     }
 }

@@ -65,4 +65,11 @@
         <item name="android:src">@drawable/ic_chevron</item>
         <item name="tint">@color/recognition_fg_dim</item>
     </style>
+
+    <style name="MicBar">
+        <item name="android:layout_width">5dp</item>
+        <item name="android:layout_height">18dp</item>
+        <item name="android:layout_marginEnd">3dp</item>
+        <item name="android:background">@drawable/meter_bar</item>
+    </style>
 </resources>

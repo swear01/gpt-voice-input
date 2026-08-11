@@ -50,26 +50,23 @@
                 android:src="@drawable/ic_mic"
                 app:tint="@color/recognition_fg" />
 
-            <FrameLayout
+            <LinearLayout
                 android:id="@+id/mic_level_container"
-                android:layout_width="120dp"
-                android:layout_height="6dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:orientation="horizontal"
                 android:visibility="gone">
 
-                <View
-                    android:id="@+id/mic_level_track"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/meter_track" />
-
-                <View
-                    android:id="@+id/mic_level_fill"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/meter_fill"
-                    android:contentDescription="@string/mic_level_desc" />
-            </FrameLayout>
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+                <View style="@style/MicBar" />
+            </LinearLayout>
 
             <ProgressBar
                 android:id="@+id/processing_bar"
