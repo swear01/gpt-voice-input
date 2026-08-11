@@ -240,8 +240,8 @@ Signed APK                        Update (installs over the old version)
 GitHub Release                    settings & data survive (same certificate)
 ```
 
-Pushing a tag (e.g. `v0.1.1`) triggers the release workflow. The APK asset
-name is predictable (`gpt-voice-input-v0.1.1.apk`) so Obtainium can track new
+Pushing a tag (e.g. `v0.1.4`) triggers the release workflow. The APK asset
+name is predictable (`gpt-voice-input-v0.1.4.apk`) so Obtainium can track new
 versions. The signing certificate never changes, so seamless updates work
 without uninstalling.
 
@@ -304,7 +304,13 @@ only Android and OpenAI public APIs; no Dictate source is copied or vendored,
 and the project does not depend on `dictate-core`. If any material is ever
 adapted, the Apache-2.0 notices of the source files will be preserved here.
 
+## Changelog & third-party licenses
+
+- [CHANGELOG.md](CHANGELOG.md) — per-version summary.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — bundled dependencies and
+  icon licenses (Apache-2.0 project license in [LICENSE](LICENSE)).
+
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE). Microphone/settings icon paths
-are from the Material Design icon set (Apache-2.0).
+Apache License 2.0 — see [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

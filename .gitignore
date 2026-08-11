@@ -16,9 +16,7 @@ captures/
 
 # OS
 .DS_Store
-
-# Deployment config (user-specific, gitignored)
-config/local.json
+*.hprof
 
 # Signing — never commit keystores or passwords
 keystore/
