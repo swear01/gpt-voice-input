@@ -76,7 +76,7 @@ Instead of typing the API key on the phone, import a settings file that already
 contains your key and profile (see below):
 
 5. Tap **Open Settings** (or the ⚙ gear in the panel).
-6. Advanced → **Profile & backup → Import settings**.
+6. **Profile & backup → Import settings**.
 7. Choose your personal settings file (e.g. `gpt-voice-input-personal.json`).
 8. Confirm the summary. If the file contains an API key, no keyboard entry of
    the key is necessary.
@@ -116,40 +116,68 @@ Transcription configuration is layered:
 
 ```text
 1. generic default.json asset   neutral public defaults (always shipped)
-2. runtime imported profile     Settings → Advanced → Profile & backup →
-                                Import (persisted app-private, survives updates)
-3. runtime custom terms         Settings → Advanced → Custom terms
+2. runtime imported profile     what you edit/import in Settings
         ↓
-   effective TranscriptionProfile sent to gpt-transcribe
+   profile sent to gpt-transcribe
 ```
 
-- `default.json` ships inside the APK with neutral, generic defaults
-  (Traditional Chinese/English code switching, neutral context, no keywords).
-  **The public release never contains personal profiles or API keys.**
-- The imported profile replaces the generic languages/context and replaces the
-  generic keyword list; custom terms are merged after and deduplicated.
-- Imported data (profile, API key, auto-stop, custom terms) lives in app-private
-  storage and survives ordinary updates (same package, same signing
-  certificate). Only an uninstall or data-clear removes it.
+### Settings → Transcription
 
-**API keys never live in the APK or in config assets** — they are entered or
-imported at runtime and stored encrypted in the Android Keystore.
+The profile actually sent to the transcription API is directly editable:
 
-### Profile & backup (Settings → Advanced)
+```text
+Languages              e.g. zh-tw, en (comma separated, validated)
+Context                the transcription prompt
+Keywords / special terms   one per line
+```
+
+Editing these fields and pressing Save creates a runtime profile override that
+persists in app-private storage and survives ordinary updates (same package,
+same signing certificate). Only an uninstall or data-clear removes it.
+
+### Settings → Profile & backup
 
 | Action | Content | API key |
 |--------|---------|---------|
-| Import settings | restores profile, auto-stop, custom terms; may also import a key | optional |
+| Import settings | restores languages/context/keywords, auto-stop; may also import a key | optional |
 | Export settings | portable non-secret backup (`gpt-voice-input-settings.json`) | **never** |
 | Export full backup | personal backup (`gpt-voice-input-personal.json`) for moving to a new phone | **plaintext, warned** |
-| Clear imported profile | removes only the imported profile (key/auto-stop/terms stay) | — |
+| Reset transcription profile | restores generic defaults (key and auto-stop kept) | — |
 
 Files are `schemaVersion: 1` JSON in the `gpt-voice-input-settings` format.
 Import is validated up front (JSON, format, schema version, language codes,
-auto-stop grid, types) and applied atomically after you confirm the summary.
-Newer unsupported schema versions are rejected with a clear message. The full
-backup warns before writing because it contains your OpenAI API key in
-plaintext — store it only in a private location.
+auto-stop grid, types, placeholder-key rejection) and applied atomically after
+you confirm the summary. Newer unsupported schema versions are rejected with a
+clear message. The full backup warns before writing because it contains your
+OpenAI API key in plaintext — store it only in a private location.
+
+### Keeping a private profile outside the repository
+
+This project is intentionally generic. You can keep your own private JSON
+anywhere outside the repository (e.g. a cloud drive) and import it on each new
+device. A minimal example with placeholder values:
+
+```json
+{
+  "format": "gpt-voice-input-settings",
+  "schemaVersion": 1,
+  "secrets": {
+    "openAiApiKey": "REPLACE_WITH_YOUR_OPENAI_API_KEY"
+  },
+  "profile": {
+    "expectedLanguages": ["zh-tw", "en"],
+    "transcriptionContext": "Transcribe natural dictation faithfully.",
+    "keywords": ["ExampleProductName", "ACME-Widget", "XYZ-42"]
+  },
+  "settings": {
+    "autoStopSeconds": 1.8,
+    "customTerms": []
+  }
+}
+```
+
+**API keys never live in the APK or in config assets** — they are entered or
+imported at runtime and stored encrypted in the Android Keystore.
 
 ### Keyword philosophy
 
@@ -229,20 +257,22 @@ between the two freely without losing data.
 
 ```
 app/src/main/kotlin/org/gptvoiceinput/
-├── ui/RecognitionActivity.kt      ACTION_RECOGNIZE_SPEECH entry, states, retry
-├── ui/SettingsActivity.kt         gear-button settings (key, auto-stop, terms)
+├── ui/RecognitionActivity.kt      ACTION_RECOGNIZE_SPEECH entry, bottom panel
+├── ui/SettingsActivity.kt         OpenAI / Transcription / Recording / backup
 ├── audio/AudioRecorder.kt         split pipeline: raw upload + analysis copy
 ├── audio/VadProcessor.kt          adaptive noise floor, energy VAD (analysis only)
 ├── audio/EndpointDetector.kt      WAITING_FOR_SPEECH → IN_SPEECH → ENDPOINT_CANDIDATE
 ├── audio/WavWriter.kt             44-byte RIFF writer (little-endian)
 ├── net/OpenAITranscriber.kt       gpt-transcribe multipart client (OkHttp)
-├── config/AppConfig.kt            default → imported profile → custom terms
-├── config/SettingsStore.kt        auto-stop, custom terms
+├── config/AppConfig.kt            default → runtime imported profile → legacy terms
+├── config/SettingsStore.kt        auto-stop, legacy customTerms migration
 ├── config/ImportedProfileStore.kt runtime imported profile (app-private)
 ├── config/SettingsBackup.kt       versioned import/export + validation
 └── security/SecureApiKeyStore.kt  Android Keystore AES/GCM key storage
 app/src/main/assets/
 └── default.json                   neutral generic defaults (the only shipped config)
+scripts/
+└── release-check-versioncode.sh   CI versionCode gate (previous-release lookup)
 ```
 
 ## Testing
