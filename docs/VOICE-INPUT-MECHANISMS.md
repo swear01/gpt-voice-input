@@ -27,6 +27,26 @@ is keyboard integration the only way?"
   text insertion through accessibility actions.
 - **Gboard / SwiftKey / Samsung** — voice typing lives inside the IME window.
 
+## Side effects of the accessibility permission (researched 2026)
+
+Why the accessibility route is a poor fit for users of banking apps:
+
+- Any app can enumerate every enabled accessibility service via
+  `AccessibilityManager.getEnabledAccessibilityServiceList()` — no permission
+  needed. There is no way to hide an enabled service.
+- Banking / securities / fintech apps (Taiwan & Korea are heavy users of this
+  check) commonly warn or refuse to operate when a non-whitelisted
+  accessibility service is enabled. Documented cases: "Banking Apps Detect
+  Android Accessibility Services" (overview), Android Community forum reports
+  of banking apps blocking with "accessibility service is operating", and a
+  published case showing "Security Risk Detected: An untrusted accessibility
+  service is enabled."
+- Android 17 (Advanced Protection Mode) further restricts the accessibility
+  API because ~90% of Android malware exploits it.
+- Consequence: a permanently-enabled accessibility service is incompatible
+  with daily use of banking apps; toggling it on/off per use defeats the
+  purpose. This reinforces keeping the accessibility permission out of scope.
+
 ## Conclusions for this project
 
 1. Keyboard integration is the mainstream but **not** the only way; the
