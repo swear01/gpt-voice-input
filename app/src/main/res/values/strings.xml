@@ -21,6 +21,33 @@
     <string name="cancel">Cancel</string>
     <string name="open_settings">Open Settings</string>
 
+    <!-- Mic level meter -->
+    <string name="mic_level_desc">Microphone input level: %1$s</string>
+    <string name="mic_level_quiet">quiet</string>
+    <string name="mic_level_moderate">moderate</string>
+    <string name="mic_level_loud">loud</string>
+
+    <!-- Recording / error strings -->
+    <string name="rec_error_save">Could not save the recording</string>
+    <string name="rec_error_no_audio">No audio was captured</string>
+    <string name="rec_error_gone">The recording is gone; please record again</string>
+    <string name="mic_permission_required">Microphone permission is required</string>
+    <string name="mic_unavailable">Microphone unavailable on this device</string>
+    <string name="mic_start_failed">Could not start recording (%1$s)</string>
+    <string name="mic_read_failed">Microphone read failed</string>
+
+    <!-- Transcription error mapping -->
+    <string name="error_rate_limited">Rate limited — please try again in a moment</string>
+    <string name="error_server">OpenAI server error — please try again</string>
+    <string name="error_api">OpenAI API error (HTTP %1$d)</string>
+    <string name="error_timeout">Request timed out — please try again</string>
+    <string name="error_network">Network error — check your connection</string>
+
+    <!-- Import/export errors -->
+    <string name="import_error_read">Could not read the selected file</string>
+    <string name="import_error_invalid">Could not import this settings file. Check that it is a valid GPT Voice Input settings file.</string>
+    <string name="import_error_newer_version">This settings file was created by a newer unsupported version.</string>
+
     <!-- Settings UI -->
     <string name="section_openai">OpenAI</string>
     <string name="section_transcription">Transcription</string>

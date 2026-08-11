@@ -9,6 +9,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.GptVoiceInput">
 
@@ -23,7 +24,6 @@
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode|screenLayout|smallestScreenSize"
             android:excludeFromRecents="true"
             android:exported="true"
-            android:launchMode="singleTask"
             android:theme="@style/Theme.GptVoiceInput.Recognition">
             <intent-filter>
                 <action android:name="android.speech.action.RECOGNIZE_SPEECH" />

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPT Voice Input</string>
+    <string name="settings_title">GPT Voice Input — 設定</string>
+
+    <!-- Recognition UI -->
+    <string name="cd_mic">麥克風</string>
+    <string name="cd_settings">設定</string>
+    <string name="status_listening">聆聽中…</string>
+    <string name="status_transcribing">轉錄中…</string>
+    <string name="status_transcribe_failed">無法轉錄</string>
+    <string name="error_unauthorized">OpenAI 拒絕了這個 API key。\n請在設定中檢查或更換。</string>
+    <string name="status_recording_failed">錄音失敗</string>
+    <string name="status_no_key">請先設定你的 OpenAI API key</string>
+    <string name="hint_no_key">開啟設定以繼續</string>
+    <string name="status_no_permission">需要麥克風權限</string>
+    <string name="hint_no_permission">請在系統設定中允許麥克風存取</string>
+    <string name="hint_tap_to_submit">點擊送出</string>
+    <string name="hint_error_generic">發生錯誤，請再試一次。</string>
+    <string name="retry">重試</string>
+    <string name="cancel">取消</string>
+    <string name="open_settings">開啟設定</string>
+
+    <!-- Mic level meter -->
+    <string name="mic_level_desc">麥克風輸入音量：%1$s</string>
+    <string name="mic_level_quiet">小聲</string>
+    <string name="mic_level_moderate">中等</string>
+    <string name="mic_level_loud">大聲</string>
+
+    <!-- Recording / error strings -->
+    <string name="rec_error_save">無法儲存錄音</string>
+    <string name="rec_error_no_audio">沒有錄到任何聲音</string>
+    <string name="rec_error_gone">錄音檔已不存在，請重新錄製</string>
+    <string name="mic_permission_required">需要麥克風權限</string>
+    <string name="mic_unavailable">此裝置無法使用麥克風</string>
+    <string name="mic_start_failed">無法開始錄音（%1$s）</string>
+    <string name="mic_read_failed">麥克風讀取失敗</string>
+
+    <!-- Transcription error mapping -->
+    <string name="error_rate_limited">已達速率限制，請稍後再試</string>
+    <string name="error_server">OpenAI 伺服器錯誤，請稍後再試</string>
+    <string name="error_api">OpenAI API 錯誤（HTTP %1$d）</string>
+    <string name="error_timeout">請求逾時，請再試一次</string>
+    <string name="error_network">網路錯誤 — 請檢查連線</string>
+
+    <!-- Import/export errors -->
+    <string name="import_error_read">無法讀取所選檔案</string>
+    <string name="import_error_invalid">無法匯入此設定檔。請確認它是有效的 GPT Voice Input 設定檔。</string>
+    <string name="import_error_newer_version">此設定檔是由較新且不支援的版本建立的。</string>
+
+    <!-- Settings UI -->
+    <string name="section_openai">OpenAI</string>
+    <string name="section_transcription">轉錄</string>
+    <string name="section_recording">錄音</string>
+    <string name="api_key_label">API key</string>
+    <string name="api_key_hint">OpenAI API key</string>
+    <string name="key_configured">已設定 key — 輸入新的可取代舊的</string>
+    <string name="key_not_configured">尚未設定 key</string>
+    <string name="languages_label">語言</string>
+    <string name="languages_hint">例如 zh-tw, en</string>
+    <string name="languages_invalid">無效的語言代碼：%1$s</string>
+    <string name="languages_empty">請至少輸入一種語言</string>
+    <string name="context_label">內容提示</string>
+    <string name="context_hint">每次轉錄時一併送出的提示（選填）</string>
+    <string name="keywords_label">關鍵字／特殊詞彙</string>
+    <string name="keywords_hint">每行一個詞</string>
+    <string name="auto_stop_label">靜音後自動停止</string>
+    <string name="auto_stop_seconds">%1$s 秒</string>
+    <string name="auto_stop_off">關閉</string>
+    <string name="section_profile">設定檔與備份</string>
+    <string name="import_settings">匯入設定</string>
+    <string name="export_settings">匯出設定</string>
+    <string name="export_full_backup">匯出完整備份</string>
+    <string name="reset_transcription_profile">重設轉錄設定檔</string>
+    <string name="reset_profile_confirm_title">重設轉錄設定檔？</string>
+    <string name="reset_profile_confirm_message">移除你的自訂轉錄設定檔並恢復為通用預設值？你的 API key 與自動停止設定會保留。</string>
+    <string name="profile_reset">已重設轉錄設定檔</string>
+    <string name="cd_chevron">展開</string>
+    <string name="clear_api_key">清除 API key</string>
+    <string name="clear_api_key_confirm_title">清除 API key？</string>
+    <string name="clear_api_key_confirm_message">要從此裝置移除已儲存的 OpenAI API key 嗎？</string>
+    <string name="api_key_cleared">已清除 API key</string>
+    <string name="backup_excludes_api_key">匯出設定絕不會包含你的 API key。「匯出完整備份」會以明文包含，請存放於私人位置。</string>
+    <string name="full_backup_warning_title">匯出完整備份？</string>
+    <string name="full_backup_warning_message">此備份會以明文包含你的 OpenAI API key。\n\n任何人拿到這個檔案都能使用你的 key 並產生費用。\n請只存放在私人位置。</string>
+    <string name="full_backup_no_key_message">目前沒有設定 OpenAI API key，此備份將不會包含 key。仍要匯出嗎？</string>
+    <string name="full_backup_confirm_button">匯出完整備份</string>
+    <string name="settings_imported">已匯入設定</string>
+    <string name="settings_exported">已匯出設定</string>
+    <string name="settings_export_failed">匯出失敗：%1$s</string>
+    <string name="settings_import_failed">匯入失敗：%1$s</string>
+    <string name="import_confirm_title">匯入設定？</string>
+    <string name="import_confirm_languages">語言：%1$s</string>
+    <string name="import_confirm_keywords">關鍵字：%1$d</string>
+    <string name="import_confirm_keywords_unchanged">關鍵字：不變</string>
+    <string name="import_confirm_auto_stop">自動停止：%1$s</string>
+    <string name="import_confirm_unchanged">不變</string>
+    <string name="import_confirm_api_key_included">API key：包含</string>
+    <string name="import_confirm_api_key_excluded">API key：不包含（保留現有 key）</string>
+    <string name="import_confirm_button">匯入</string>
+    <string name="save">儲存</string>
+    <string name="saved">已儲存</string>
+</resources>
