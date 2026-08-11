@@ -4,6 +4,28 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v0.1.5
+
+- **Auto-stop persistence (#7)**: auto-stop is now stored as exact integer
+  milliseconds (0 = OFF, 1000–3000 in 200 ms steps) with safe one-time
+  migration from the legacy Float preference; the slider no longer reopens as
+  OFF, corrupt values fall back to the 1.8 s default, and opening Settings
+  never mutates a valid value.
+- **Live mic level meter (#6)**: while listening, a compact horizontal meter
+  shows the analysis-side input level (RMS → dBFS → 0..1, fast attack / slow
+  release, ~30 fps throttled, no layout churn). It resets/hides outside
+  LISTENING and never touches the upload path.
+- **Localization (#5)**: UI follows the system/app locale — English remains the
+  complete default, Traditional Chinese (`values-b+zh+Hant`) is added, Android
+  13+ per-app language is supported via `localeConfig` (default System), and
+  all user-facing Kotlin strings were externalized into resources.
+- **Recognizer result delivery (#4)**: RecognitionActivity uses standard
+  launch mode (singleTask removed), honors the documented
+  `EXTRA_RESULTS_PENDINGINTENT` forwarding route (with
+  `EXTRA_RESULTS_PENDINGINTENT_BUNDLE` merging), keeps the classic
+  `RESULT_OK + EXTRA_RESULTS` path, adds privacy-safe delivery diagnostics, and
+  guards duplicate sessions without a task-mode hack.
+
 ## v0.1.4
 
 - Package front door: `Android Settings → Apps → GPT Voice Input → Open` now
