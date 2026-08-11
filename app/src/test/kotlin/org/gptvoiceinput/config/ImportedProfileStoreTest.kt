@@ -31,7 +31,7 @@ class ImportedProfileStoreTest {
         val profile = TranscriptionProfile(
             expectedLanguages = listOf("zh-tw", "en"),
             transcriptionContext = "Imported context.",
-            keywords = listOf("HAPI", "Pi Agent"),
+            keywords = listOf("ACME_TERM", "ExampleTool"),
         )
         s.save(profile)
 

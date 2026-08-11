@@ -14,9 +14,9 @@ class SettingsBackupTest {
     private val profile = TranscriptionProfile(
         expectedLanguages = listOf("zh-tw", "en"),
         transcriptionContext = "Some context.\nSecond line.",
-        keywords = listOf("HAPI", "Pi Agent", "BTOR2"),
+        keywords = listOf("ACME_TERM", "ExampleTool", "ZXQ-17"),
     )
-    private val customTerms = listOf("runtime-term", "another one")
+    private val customTerms = listOf("example-term", "synthetic-term")
 
     private fun exportData(apiKey: String? = null, autoStop: Double = 1.8) = ExportData(
         profile = profile,
@@ -33,10 +33,10 @@ class SettingsBackupTest {
         profile: JSONObject? = JSONObject()
             .put("expectedLanguages", JSONArray(listOf("zh-tw", "en")))
             .put("transcriptionContext", "Some context.\nSecond line.")
-            .put("keywords", JSONArray(listOf("HAPI", "Pi Agent", "BTOR2"))),
+            .put("keywords", JSONArray(listOf("ACME_TERM", "ExampleTool", "ZXQ-17"))),
         settings: JSONObject? = JSONObject()
             .put("autoStopSeconds", 1.8)
-            .put("customTerms", JSONArray(listOf("runtime-term", "another one"))),
+            .put("customTerms", JSONArray(listOf("example-term", "synthetic-term"))),
     ): String {
         val root = JSONObject()
             .put("format", format)
@@ -147,7 +147,7 @@ class SettingsBackupTest {
     @Test
     fun `bad keyword type is rejected`() {
         val profile = JSONObject()
-            .put("keywords", JSONArray().put("HAPI").put(7))
+            .put("keywords", JSONArray().put("ACME_TERM").put(7))
         assertThrows(BackupException.Invalid::class.java) {
             SettingsBackup.parse(fileJson(profile = profile))
         }
@@ -291,12 +291,81 @@ class SettingsBackupTest {
         val profile = JSONObject()
             .put("expectedLanguages", JSONArray(listOf("zh-tw", "en")))
             .put("transcriptionContext", "ctx")
-            .put("keywords", JSONArray(listOf("HA<PI")))
+            .put("keywords", JSONArray(listOf("ACME<TERM")))
         val settings = JSONObject()
             .put("autoStopSeconds", 1.8)
-            .put("customTerms", JSONArray(listOf("run\r\ntime")))
+            .put("customTerms", JSONArray(listOf("synth\r\nterm")))
         val parsed = SettingsBackup.parse(fileJson(profile = profile, settings = settings))
-        assertTrue(parsed.profile!!.keywords.contains("HA PI"))
-        assertTrue(parsed.customTerms!!.contains("run time"))
+        assertTrue(parsed.profile!!.keywords.contains("ACME TERM"))
+        assertTrue(parsed.customTerms!!.contains("synth term"))
+    }
+
+    // ------------------------------------------------------ mergeIntoCurrent
+
+    private val current = TranscriptionProfile(
+        expectedLanguages = listOf("zh-tw", "en"),
+        transcriptionContext = "current context",
+        keywords = listOf("ACME_TERM"),
+    )
+
+    @Test
+    fun `mergeIntoCurrent unifies profile keywords and legacy custom terms`() {
+        val parsed = ParsedSettings(
+            profile = TranscriptionProfile(
+                expectedLanguages = listOf("yue"),
+                transcriptionContext = "UNIQUE_TEST_CONTEXT",
+                keywords = listOf("ACME_TERM", "ExampleTool"),
+            ),
+            autoStopSeconds = 1.8,
+            customTerms = listOf("ZXQ-17", "ACME_TERM"),
+            apiKey = null,
+        )
+        val merged = SettingsBackup.mergeIntoCurrent(current, parsed)
+        assertEquals(listOf("yue"), merged.expectedLanguages)
+        assertEquals("UNIQUE_TEST_CONTEXT", merged.transcriptionContext)
+        // keywords + legacy terms, deduplicated, order-preserving
+        assertEquals(listOf("ACME_TERM", "ExampleTool", "ZXQ-17"), merged.keywords)
+    }
+
+    @Test
+    fun `mergeIntoCurrent keeps current when file has no profile or terms`() {
+        val parsed = ParsedSettings(profile = null, autoStopSeconds = 1.8, customTerms = null, apiKey = null)
+        val merged = SettingsBackup.mergeIntoCurrent(current, parsed)
+        assertEquals(current, merged)
+    }
+
+    @Test
+    fun `mergeIntoCurrent keeps current keywords when only languages change`() {
+        val parsed = ParsedSettings(
+            profile = TranscriptionProfile(
+                expectedLanguages = listOf("yue"),
+                transcriptionContext = "",
+                keywords = emptyList(),
+            ),
+            autoStopSeconds = null,
+            customTerms = null,
+            apiKey = null,
+        )
+        val merged = SettingsBackup.mergeIntoCurrent(current, parsed)
+        assertEquals(listOf("yue"), merged.expectedLanguages)
+        // empty file keywords replace the current list (explicit)
+        assertEquals(emptyList<String>(), merged.keywords)
+    }
+
+    @Test
+    fun `mergeIntoCurrent empty file keyword list replaces current`() {
+        val parsed = ParsedSettings(
+            profile = TranscriptionProfile(
+                expectedLanguages = emptyList(),
+                transcriptionContext = "UNIQUE_TEST_CONTEXT",
+                keywords = emptyList(),
+            ),
+            autoStopSeconds = null,
+            customTerms = null,
+            apiKey = null,
+        )
+        val merged = SettingsBackup.mergeIntoCurrent(current, parsed)
+        assertEquals(emptyList<String>(), merged.keywords)
+        assertEquals("UNIQUE_TEST_CONTEXT", merged.transcriptionContext)
     }
 }

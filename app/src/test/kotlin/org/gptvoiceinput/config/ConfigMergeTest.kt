@@ -38,8 +38,8 @@ class ConfigMergeTest {
 
     @Test
     fun `default keywords plus custom terms when no imported profile`() {
-        val profile = merge(customTerms = listOf("HAPI", "zed", "Pi Agent"))
-        assertEquals(listOf("HAPI", "zed", "Pi Agent"), profile.keywords)
+        val profile = merge(customTerms = listOf("ACME_TERM", "acme", "ExampleTool"))
+        assertEquals(listOf("ACME_TERM", "acme", "ExampleTool"), profile.keywords)
     }
 
     @Test
@@ -68,17 +68,17 @@ class ConfigMergeTest {
 
     @Test
     fun `imported keywords replace the default keyword list`() {
-        val profile = merge(imported = imported(keywords = listOf("HAPI", "BTOR2")))
-        assertEquals(listOf("HAPI", "BTOR2"), profile.keywords)
+        val profile = merge(imported = imported(keywords = listOf("ACME_TERM", "ZXQ-17")))
+        assertEquals(listOf("ACME_TERM", "ZXQ-17"), profile.keywords)
     }
 
     @Test
     fun `effective keywords are imported keywords plus custom terms deduped`() {
         val profile = merge(
-            imported = imported(keywords = listOf("HAPI", "ACP")),
-            customTerms = listOf("HAPI", "MathSAT"),
+            imported = imported(keywords = listOf("ACME_TERM", "ACME_CORP")),
+            customTerms = listOf("ACME_TERM", "ExampleSAT"),
         )
-        assertEquals(listOf("HAPI", "ACP", "MathSAT"), profile.keywords)
+        assertEquals(listOf("ACME_TERM", "ACME_CORP", "ExampleSAT"), profile.keywords)
     }
 
     @Test
@@ -105,7 +105,7 @@ class ConfigMergeTest {
         val imported = imported(
             languages = listOf("yue", "cmn"),
             context = "Imported context that must survive updates.",
-            keywords = listOf("HAPI"),
+            keywords = listOf("ACME_TERM"),
         )
         val defaultV1 = JSONObject(
             """
@@ -136,6 +136,6 @@ class ConfigMergeTest {
         // And the imported values specifically still win over the new default:
         assertEquals(listOf("yue", "cmn"), effV2.expectedLanguages)
         assertEquals("Imported context that must survive updates.", effV2.transcriptionContext)
-        assertEquals(listOf("HAPI"), effV2.keywords)
+        assertEquals(listOf("ACME_TERM"), effV2.keywords)
     }
 }

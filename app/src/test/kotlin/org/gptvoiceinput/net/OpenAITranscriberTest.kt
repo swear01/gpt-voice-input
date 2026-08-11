@@ -37,7 +37,7 @@ class OpenAITranscriberTest {
     private fun profile(
         context: String = "Neutral context.",
         languages: List<String> = listOf("zh-tw", "en"),
-        keywords: List<String> = listOf("HAPI", "Pi Agent"),
+        keywords: List<String> = listOf("ACME_TERM", "ExampleTool"),
     ) = TranscriptionProfile(languages, context, keywords)
 
     private fun transcriber(client: OkHttpClient = OkHttpClient()): OpenAITranscriber =
@@ -74,8 +74,8 @@ class OpenAITranscriberTest {
         assertTrue("language zh-tw", body.contains("zh-tw"))
         assertTrue("language en", body.contains("en"))
         assertTrue("keywords[] repeated", body.contains("name=\"keywords[]\""))
-        assertTrue("keyword HAPI", body.contains("HAPI"))
-        assertTrue("keyword Pi Agent", body.contains("Pi Agent"))
+        assertTrue("keyword ACME_TERM", body.contains("ACME_TERM"))
+        assertTrue("keyword ExampleTool", body.contains("ExampleTool"))
         // For gpt-transcribe the plural `languages` replaces `language`;
         // the singular field must never be sent.
         assertFalse("no singular language field", body.contains("name=\"language\""))
