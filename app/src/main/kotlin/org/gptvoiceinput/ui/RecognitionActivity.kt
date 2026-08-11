@@ -1,11 +1,15 @@
 package org.gptvoiceinput.ui
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.content.res.Configuration
+import android.os.SystemClock
 import android.speech.RecognizerIntent
+import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
@@ -53,6 +57,8 @@ class RecognitionActivity : AppCompatActivity() {
     private lateinit var panelView: View
     private lateinit var gearButton: ImageButton
     private lateinit var micIcon: View
+    private lateinit var meterContainer: View
+    private lateinit var meterFill: View
     private lateinit var processingBar: ProgressBar
     private lateinit var statusText: TextView
     private lateinit var hintText: TextView
@@ -67,11 +73,25 @@ class RecognitionActivity : AppCompatActivity() {
     private var transcribeJob: Job? = null
     private var wavReady = false
 
+    /** Incoming result-delivery route (activity result vs PendingIntent). */
+    private var pendingIntent: PendingIntent? = null
+    private var pendingIntentBundle: Bundle? = null
+
+    /** Throttles meter updates to ~30 fps without touching layout. */
+    @Volatile
+    private var lastMeterUiMs = 0L
+
     private val tempWav: File
         get() = File(cacheDir, TEMP_RECORDING_NAME)
 
     private val recorderListener = object : AudioRecorder.Listener {
-        override fun onFrameCaptured(elapsedMs: Long) = Unit
+        override fun onFrameCaptured(elapsedMs: Long, level01: Float) {
+            // Bounded update rate (~30 fps): cheap skip before posting.
+            val now = SystemClock.uptimeMillis()
+            if (now - lastMeterUiMs < METER_UI_INTERVAL_MS) return
+            lastMeterUiMs = now
+            runOnUiThread { renderMeter(level01) }
+        }
 
         override fun onEndOfSpeech() = runOnUiThread { submit() }
 
@@ -95,6 +115,8 @@ class RecognitionActivity : AppCompatActivity() {
         panelView = findViewById(R.id.panel)
         gearButton = findViewById(R.id.gear_button)
         micIcon = findViewById(R.id.mic_icon)
+        meterContainer = findViewById(R.id.mic_level_container)
+        meterFill = findViewById(R.id.mic_level_fill)
         processingBar = findViewById(R.id.processing_bar)
         statusText = findViewById(R.id.status_text)
         hintText = findViewById(R.id.hint_text)
@@ -108,6 +130,21 @@ class RecognitionActivity : AppCompatActivity() {
         panelView.setOnClickListener {
             if (phase == Phase.LISTENING) submit()
         }
+        // The meter fill scales horizontally from the left edge (no relayout).
+        meterFill.pivotX = 0f
+        meterFill.pivotY = meterFill.height / 2f
+
+        inspectIncomingIntent(intent)
+        val owner = sessionOwner
+        if (owner != null && owner !== this) {
+            // A recognition session is already running (duplicate launch):
+            // refuse cleanly instead of opening a second microphone. The
+            // caller of THIS instance gets a cancelled result.
+            Log.i(TAG, "session: duplicate launch refused (owner=${owner.hashCode()})")
+            finishSession(RESULT_CANCELED, null)
+            return
+        }
+        sessionOwner = this
         gearButton.setOnClickListener { openSettings() }
         retryButton.setOnClickListener { retry() }
         cancelButton.setOnClickListener { cancelSession() }
@@ -197,15 +234,46 @@ class RecognitionActivity : AppCompatActivity() {
         recorder = null
         transcribeJob?.cancel()
         if (phase != Phase.DONE) tempWav.delete()
+        if (sessionOwner === this) sessionOwner = null
         super.onDestroy()
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        // A second launch while a session is active is ignored (singleTask).
+    /**
+     * Privacy-safe inspection of the incoming ACTION_RECOGNIZE_SPEECH intent:
+     * action, flags, result-route extras, and caller. Never logs spoken text,
+     * API keys, audio or personal configuration.
+     */
+    private fun inspectIncomingIntent(intent: Intent) {
+        pendingIntent = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(RecognizerIntent.EXTRA_RESULTS_PENDINGINTENT, PendingIntent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(RecognizerIntent.EXTRA_RESULTS_PENDINGINTENT)
+        }
+        pendingIntentBundle = intent.getBundleExtra(RecognizerIntent.EXTRA_RESULTS_PENDINGINTENT_BUNDLE)
+        val caller = callingActivity?.className ?: getReferrer()?.host
+        Log.i(
+            TAG,
+            "incoming action=${intent.action} flags=0x${Integer.toHexString(intent.flags)}" +
+                " hasPendingIntent=${pendingIntent != null}" +
+                " hasPendingBundle=${pendingIntentBundle != null}" +
+                " caller=${caller ?: "unknown"}",
+        )
     }
 
-    // ------------------------------------------------------------------ state
+    /** Decides the delivery route: PendingIntent forwarding vs Activity result. */
+    internal fun deliveryPlan(intent: Intent): DeliveryPlan {
+        val hasPi = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(RecognizerIntent.EXTRA_RESULTS_PENDINGINTENT, PendingIntent::class.java) != null
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra<PendingIntent>(RecognizerIntent.EXTRA_RESULTS_PENDINGINTENT) != null
+        }
+        return if (hasPi) DeliveryPlan(viaPendingIntent = true, viaActivityResult = false)
+        else DeliveryPlan(viaPendingIntent = false, viaActivityResult = true)
+    }
+
+    internal data class DeliveryPlan(val viaPendingIntent: Boolean, val viaActivityResult: Boolean)
 
     private fun decideNext() {
         val key = secureStore.load()
@@ -252,9 +320,10 @@ class RecognitionActivity : AppCompatActivity() {
         if (phase == Phase.PROCESSING || phase == Phase.DONE) return
         tempWav.delete()
         wavReady = false
+        lastMeterUiMs = 0L
         setPhase(Phase.LISTENING)
 
-        val endpointMs = (settingsStore.autoStopSeconds * 1000.0).toInt() // 0 = off
+        val endpointMs = settingsStore.autoStopMs // 0 = off
         recorder = AudioRecorder(
             context = this,
             wavFile = tempWav,
@@ -275,14 +344,14 @@ class RecognitionActivity : AppCompatActivity() {
             recorder?.stopAndFinalize()
         } catch (e: Exception) {
             recorder = null
-            showRecordingError("Could not save the recording")
+            showRecordingError(getString(R.string.rec_error_save))
             return
         }
         recorder = null
         wavReady = true
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
-            showRecordingError("No audio was captured")
+            showRecordingError(getString(R.string.rec_error_no_audio))
             return
         }
 
@@ -319,25 +388,68 @@ class RecognitionActivity : AppCompatActivity() {
     private fun retry() {
         if (phase != Phase.ERROR) return
         if (!wavReady || !tempWav.exists()) {
-            showError(TranscriptionException.Protocol("The recording is gone; please record again"))
+            setPhase(Phase.ERROR)
+            statusText.setText(R.string.status_transcribe_failed)
+            hintText.setText(R.string.rec_error_gone)
+            errorButtons.visibility = View.VISIBLE
+            retryButton.visibility = View.GONE
             return
         }
         setPhase(Phase.PROCESSING)
         transcribe()
     }
 
-    private fun deliverResult(transcript: String) {
+    internal fun deliverResult(transcript: String) {
         phase = Phase.DONE
         tempWav.delete()
         wavReady = false
 
+        Log.i(TAG, "deliver: transcription ok; result payload created")
         val result = Intent()
             .putStringArrayListExtra(
                 RecognizerIntent.EXTRA_RESULTS,
                 arrayListOf(transcript),
             )
-        setResult(RESULT_OK, result)
+        finishSession(RESULT_OK, result)
+    }
+
+    /**
+     * Combines the caller-provided EXTRA_RESULTS_PENDINGINTENT_BUNDLE with the
+     * recognizer result for the PendingIntent route. Our extras win on
+     * conflicts (e.g. EXTRA_RESULTS).
+     */
+    internal fun buildForwardedIntent(result: Intent?, bundle: Bundle?): Intent {
+        val combined = Intent()
+        bundle?.let { combined.putExtras(it) }
+        result?.let { combined.putExtras(it) }
+        return combined
+    }
+
+    /**
+     * Standard recognizer handoff. If the caller supplied
+     * EXTRA_RESULTS_PENDINGINTENT, the result is forwarded through it (with
+     * EXTRA_RESULTS_PENDINGINTENT_BUNDLE merged in); otherwise the classic
+     * setResult(RESULT_OK, EXTRA_RESULTS) path is used. In both cases the
+     * Activity finishes immediately so SwiftKey can return and commit text.
+     */
+    private fun finishSession(resultCode: Int, result: Intent?) {
+        val plan = deliveryPlan(intent)
+        val pi = pendingIntent
+        if (plan.viaPendingIntent && pi != null) {
+            val forwarded = result?.let { buildForwardedIntent(it, pendingIntentBundle) }
+            try {
+                pi.send(this, resultCode, forwarded)
+                Log.i(TAG, "deliver: forwarded via EXTRA_RESULTS_PENDINGINTENT code=$resultCode")
+            } catch (e: Exception) {
+                Log.e(TAG, "deliver: PendingIntent send failed; falling back to activity result", e)
+                setResult(resultCode, result)
+            }
+        } else {
+            setResult(resultCode, result)
+            Log.i(TAG, "deliver: setResult code=$resultCode via activity result")
+        }
         finish()
+        Log.i(TAG, "deliver: finished")
     }
 
     /** User back / system dismissal: no API request made where possible. */
@@ -348,8 +460,7 @@ class RecognitionActivity : AppCompatActivity() {
         transcribeJob?.cancel()
         phase = Phase.DONE
         tempWav.delete()
-        setResult(RESULT_CANCELED)
-        finish()
+        finishSession(RESULT_CANCELED, null)
     }
 
     /** No-speech timeout: graceful cancel without an API request. */
@@ -358,8 +469,7 @@ class RecognitionActivity : AppCompatActivity() {
         recorder = null
         phase = Phase.DONE
         tempWav.delete()
-        setResult(RESULT_CANCELED)
-        finish()
+        finishSession(RESULT_CANCELED, null)
     }
 
     private fun openSettings() {
@@ -400,17 +510,59 @@ class RecognitionActivity : AppCompatActivity() {
             retryButton.visibility = View.GONE
             openSettingsErrorButton.visibility = View.VISIBLE
         } else {
-            hintText.text = error.localizedMessage ?: getString(R.string.hint_error_generic)
+            hintText.setText(errorText(error))
             retryButton.visibility = if (wavReady && tempWav.exists()) View.VISIBLE else View.GONE
             openSettingsErrorButton.visibility = View.GONE
         }
         errorButtons.visibility = View.VISIBLE
     }
 
+    /** Maps structured errors to stable, localized, app-owned text. */
+    private fun errorText(error: TranscriptionException): Int = when (error) {
+        is TranscriptionException.Unauthorized -> R.string.error_unauthorized
+        is TranscriptionException.RateLimited -> R.string.error_rate_limited
+        is TranscriptionException.ServerError -> R.string.error_server
+        is TranscriptionException.ApiError -> R.string.error_api
+        is TranscriptionException.Timeout -> R.string.error_timeout
+        is TranscriptionException.Network -> R.string.error_network
+        is TranscriptionException.Protocol -> R.string.hint_error_generic
+    }
+
+    /**
+     * Live microphone input meter (LISTENING only). Visualizes the analysis-side
+     * level; never touches the upload path.
+     */
+    internal fun setMeterVisible(visible: Boolean) {
+        meterContainer.visibility = if (visible) View.VISIBLE else View.GONE
+        if (!visible) {
+            meterFill.scaleX = 0f
+            meterContainer.contentDescription = getString(R.string.mic_level_desc)
+        }
+    }
+
+    internal fun renderMeter(level01: Float) {
+        // The meter is only visible in LISTENING (setPhase drives visibility).
+        if (meterContainer.visibility != View.VISIBLE) return
+        val level = if (level01.isNaN()) 0f else level01.coerceIn(0f, 1f)
+        meterFill.scaleX = level
+        meterFill.alpha = 0.45f + 0.55f * level
+        meterContainer.contentDescription = getString(
+            R.string.mic_level_desc,
+            getString(
+                when {
+                    level < 0.15f -> R.string.mic_level_quiet
+                    level < 0.6f -> R.string.mic_level_moderate
+                    else -> R.string.mic_level_loud
+                },
+            ),
+        )
+    }
+
     private fun setPhase(newPhase: Phase) {
         phase = newPhase
         micIcon.visibility = if (newPhase == Phase.PROCESSING) View.GONE else View.VISIBLE
         processingBar.visibility = if (newPhase == Phase.PROCESSING) View.VISIBLE else View.GONE
+        setMeterVisible(newPhase == Phase.LISTENING)
         errorButtons.visibility = View.GONE
         settingsActionButton.visibility = View.GONE
 
@@ -442,9 +594,26 @@ class RecognitionActivity : AppCompatActivity() {
         private const val TEMP_RECORDING_NAME = "current_recording.wav"
         private const val REQUEST_MIC_PERMISSION = 1001
 
+        /**
+         * Duplicate-launch guard (standard launch mode): only one recognition
+         * session per process; extra instances cancel themselves cleanly
+         * instead of opening a second microphone. The owner reference is
+         * cleared by the owning instance on destroy.
+         */
+        @Volatile
+        private var sessionOwner: RecognitionActivity? = null
+
+        /** Test hook: clears the process-wide session guard between tests. */
+        internal fun resetSessionGuardForTest() {
+            sessionOwner = null
+        }
+
         /** Panel ≈ 38% of window height, bounded to keyboard-like 180–340dp. */
         private const val PANEL_HEIGHT_FRACTION = 0.38f
         private const val PANEL_HEIGHT_MIN_DP = 180
         private const val PANEL_HEIGHT_MAX_DP = 340
+
+        /** ~30 fps meter updates (33 ms); frames arrive every 20 ms. */
+        private const val METER_UI_INTERVAL_MS = 33L
     }
 }

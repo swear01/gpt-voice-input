@@ -95,7 +95,7 @@ class SettingsActivity : AppCompatActivity() {
         updateApiKeyHint()
 
         // Slider positions: 1.0, 1.2, ..., 3.0, OFF (OFF is the far end).
-        val options = SettingsStore.AUTO_STOP_OPTIONS
+        val options = SettingsStore.AUTO_STOP_OPTIONS_MS
         autoStopSeekBar.max = options.size - 1
         autoStopSeekBar.progress = indexOfCurrent(options)
         renderAutoStop(options)
@@ -162,18 +162,18 @@ class SettingsActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------- autostop
 
-    private fun indexOfCurrent(options: List<Double>): Int {
-        val current = settingsStore.autoStopSeconds
+    private fun indexOfCurrent(options: List<Int>): Int {
+        val current = settingsStore.autoStopMs
         val idx = options.indexOf(current)
-        return if (idx >= 0) idx else options.indexOfFirst { it == SettingsStore.AUTO_STOP_OFF }
+        return if (idx >= 0) idx else options.indexOfFirst { it == SettingsStore.AUTO_STOP_OFF_MS }
     }
 
-    private fun renderAutoStop(options: List<Double>) {
-        val selected = options[autoStopSeekBar.progress]
-        autoStopValue.text = if (selected == SettingsStore.AUTO_STOP_OFF) {
+    private fun renderAutoStop(options: List<Int>) {
+        val selectedMs = options[autoStopSeekBar.progress]
+        autoStopValue.text = if (selectedMs == SettingsStore.AUTO_STOP_OFF_MS) {
             getString(R.string.auto_stop_off)
         } else {
-            getString(R.string.auto_stop_seconds, "%.1f".format(selected))
+            getString(R.string.auto_stop_seconds, "%.1f".format(selectedMs / 1000.0))
         }
     }
 
@@ -239,7 +239,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         importedProfileStore.save(TranscriptionProfile(languages, context, keywords))
         settingsStore.setCustomTerms(emptyList())
-        settingsStore.autoStopSeconds = SettingsStore.AUTO_STOP_OPTIONS[autoStopSeekBar.progress]
+        settingsStore.setAutoStopMs(SettingsStore.AUTO_STOP_OPTIONS_MS[autoStopSeekBar.progress])
 
         populateTranscriptionFields()
         Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show()
@@ -258,13 +258,16 @@ class SettingsActivity : AppCompatActivity() {
             null
         }
         if (text == null) {
-            toastImportError("Could not read the selected file")
+            toastImportError(getString(R.string.import_error_read))
             return
         }
         val parsed = try {
             SettingsBackup.parse(text)
+        } catch (e: BackupException.UnsupportedVersion) {
+            toastImportError(getString(R.string.import_error_newer_version))
+            return
         } catch (e: BackupException) {
-            toastImportError(e.message ?: "Invalid settings file")
+            toastImportError(getString(R.string.import_error_invalid))
             return
         }
         showImportConfirm(parsed)
@@ -313,7 +316,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun formatAutoStop(value: Double?): String = when {
         value == null -> getString(R.string.import_confirm_unchanged)
-        value == SettingsStore.AUTO_STOP_OFF -> getString(R.string.auto_stop_off)
+        value <= 0.0 -> getString(R.string.auto_stop_off)
         else -> getString(R.string.auto_stop_seconds, "%.1f".format(value))
     }
 
@@ -324,11 +327,11 @@ class SettingsActivity : AppCompatActivity() {
         val merged = SettingsBackup.mergeIntoCurrent(baseProfile(), parsed)
         importedProfileStore.save(merged)
         settingsStore.setCustomTerms(emptyList())
-        parsed.autoStopSeconds?.let { settingsStore.autoStopSeconds = it }
+        parsed.autoStopSeconds?.let { settingsStore.setAutoStopSeconds(it) }
 
         // Refresh every visible field so the user sees the imported state.
         updateApiKeyHint()
-        val options = SettingsStore.AUTO_STOP_OPTIONS
+        val options = SettingsStore.AUTO_STOP_OPTIONS_MS
         autoStopSeekBar.progress = indexOfCurrent(options)
         renderAutoStop(options)
         populateTranscriptionFields()
@@ -379,7 +382,7 @@ class SettingsActivity : AppCompatActivity() {
             stream.use { it.write(bytes) }
             Toast.makeText(this, R.string.settings_exported, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            toastExportError(e.message ?: "Unknown error")
+            toastExportError(e.message ?: getString(R.string.hint_error_generic))
         }
     }
 

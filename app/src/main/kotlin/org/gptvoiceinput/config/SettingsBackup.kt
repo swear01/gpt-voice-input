@@ -3,6 +3,7 @@ package org.gptvoiceinput.config
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 /**
  * Portable settings file, `schemaVersion` 1. Supports both the safe export
@@ -58,10 +59,16 @@ object SettingsBackup {
     private val VALID_LANGUAGE =
         Regex("[a-z]{2,3}(-[A-Za-z]{2,4})?", RegexOption.IGNORE_CASE)
 
-    private val AUTO_STOP_STEP = SettingsStore.AUTO_STOP_STEP
-    private val AUTO_STOP_MIN = SettingsStore.AUTO_STOP_MIN
-    private val AUTO_STOP_MAX = SettingsStore.AUTO_STOP_MAX
-    private const val AUTO_STOP_OFF = SettingsStore.AUTO_STOP_OFF
+    /** Allowed: OFF (exactly 0.0) or one of the supported 0.2 s steps. */
+    fun validateAutoStop(value: Double): Boolean = when {
+        value.isNaN() || value.isInfinite() -> false
+        value == 0.0 -> true // OFF sentinel
+        value < 0.0 -> false
+        else -> {
+            val ms = (value * 1000.0).roundToInt()
+            ms in SettingsStore.AUTO_STOP_OPTIONS_MS
+        }
+    }
 
     /** Serializes with an optional `secrets` section (apiKey != null = full backup). */
     fun serialize(data: ExportData): String {
@@ -167,14 +174,6 @@ object SettingsBackup {
             customTerms = customTerms,
             apiKey = apiKey,
         )
-    }
-
-    /** Allowed: OFF (0.0) or 1.0–3.0 in 0.2 s increments. */
-    fun validateAutoStop(value: Double): Boolean {
-        if (value == AUTO_STOP_OFF) return true
-        if (value < AUTO_STOP_MIN || value > AUTO_STOP_MAX) return false
-        val steps = (value - AUTO_STOP_MIN) / AUTO_STOP_STEP
-        return kotlin.math.abs(steps - kotlin.math.round(steps)) < 1e-9
     }
 
     /** Language-code validation shared by import parsing and the Settings UI. */
