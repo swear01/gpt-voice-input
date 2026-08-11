@@ -275,6 +275,9 @@ class RecognitionActivity : AppCompatActivity() {
 
     internal data class DeliveryPlan(val viaPendingIntent: Boolean, val viaActivityResult: Boolean)
 
+    /** Test hook: current phase (for diagnosing duplicate-session tests). */
+    internal fun phaseForTest(): String = phase.name
+
     private fun decideNext() {
         val key = secureStore.load()
         if (key.isNullOrBlank()) {

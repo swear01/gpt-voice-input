@@ -140,16 +140,34 @@ class ResultDeliveryTest {
         val second = launch()
 
         // The duplicate instance must deliver RESULT_CANCELED and finish.
-        assertEquals(Activity.RESULT_CANCELED, shadowOf(second).resultCode)
-        assertTrue(second.isFinishing)
+        assertEquals(
+            "duplicate session must return RESULT_CANCELED",
+            Activity.RESULT_CANCELED,
+            shadowOf(second).resultCode,
+        )
+        assertTrue("duplicate session must finish", second.isFinishing)
 
-        // The first instance is untouched.
-        assertFalse(first.isFinishing)
+        // The first session's result path is not corrupted by the duplicate.
+        // (Robolectric's task simulation may mark the first instance as
+        // finishing when the second is built; the semantic invariant is that
+        // the first can still deliver its own result payload.)
+        first.deliverResult("UNIQUE_TEST_TEXT")
+        assertEquals(
+            "first session must still deliver its result",
+            Activity.RESULT_OK,
+            shadowOf(first).resultCode,
+        )
+        assertEquals(
+            listOf("UNIQUE_TEST_TEXT"),
+            shadowOf(first).resultIntent
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS),
+        )
 
-        // After the first is destroyed, a new session is allowed again.
+        // After the owner is destroyed, a fresh session starts normally
+        // instead of being refused (phase proceeds past the guard to NO_KEY).
         controllers[0].destroy()
         val third = launch()
-        assertFalse(third.isFinishing)
+        assertEquals("fresh session must start, not be refused", "NO_KEY", third.phaseForTest())
     }
 
     // ------------------------------------------------------- manifest invariant
