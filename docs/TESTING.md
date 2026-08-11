@@ -61,6 +61,12 @@ Score each line as correct / partially wrong / wrong, noting the exact error.
 11. Microphone permission denied: guidance screen; nothing inserted.
 12. Raw audio: uploaded WAV must NOT pass through the VAD/noise path (verified
     by architecture: separate analysis copy; no AudioEffect attached).
+13. Chat heads / floating windows (e.g. Messenger bubbles): the bottom panel
+    is an Activity window (TYPE_APPLICATION), which is BELOW
+    TYPE_APPLICATION_OVERLAY windows — a bubble can cover it. This is
+    inherent to non-IME voice panels (IME windows sit above overlays; the
+    system recognizer is full-screen so it stays usable). Workaround: move or
+    dismiss the bubble while dictating. See README troubleshooting.
 
 ## Regression checklist (v0.1.3)
 

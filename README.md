@@ -245,6 +245,25 @@ name is predictable (`gpt-voice-input-v0.1.4.apk`) so Obtainium can track new
 versions. The signing certificate never changes, so seamless updates work
 without uninstalling.
 
+### Chat heads / floating windows (e.g. Messenger bubbles)
+
+When replying from a Messenger chat head, the recognition panel can be covered
+by the bubble. This is a window-layer limitation, not a bug:
+
+- The panel is an Activity window (`TYPE_APPLICATION`).
+- Chat-head bubbles use `TYPE_APPLICATION_OVERLAY`, which Android places
+  **above all activity windows** but **below the input-method window**
+  (official `WindowManager.LayoutParams` documentation).
+- IME-based voice input (Gboard / SwiftKey's own voice) therefore draws above
+  bubbles; the system recognizer is a full-screen activity, so a bubble never
+  hides it entirely. A small bottom-anchored non-IME panel is the one case
+  that can be fully covered.
+
+Workaround: move or dismiss the bubble while dictating. Making the panel
+appear above bubbles would require either an input-method service or the
+"display over other apps" overlay permission — both deliberately out of
+scope for this project.
+
 ### Advanced / manual installation (troubleshooting)
 
 Only for troubleshooting — the normal path is Obtainium:
