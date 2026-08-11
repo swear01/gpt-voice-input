@@ -23,11 +23,17 @@ APK="${3:?apk path required}"
 AAPT2="${4:-aapt2}"
 
 # Newest stable release that is not the current tag (Releases API is newest-first).
-PREV_RELEASE=$(gh api "repos/$REPO/releases" \
-  --jq "[.[] | select(.draft == false and .prerelease == false and .tag_name != \"$CURRENT_TAG\")][0].tag_name" 2>/dev/null || true)
+GH_OUT=$(gh api "repos/$REPO/releases" \
+  --jq "[.[] | select(.draft == false and .prerelease == false and .tag_name != \"$CURRENT_TAG\")][0].tag_name" 2>&1) || {
+  echo "ERROR: gh api failed:"
+  echo "$GH_OUT"
+  exit 1
+}
+PREV_RELEASE=$(echo "$GH_OUT" | tail -1)
 
 if [ -z "$PREV_RELEASE" ] || [ "$PREV_RELEASE" = "null" ]; then
   echo "ERROR: no previous stable release found (current tag: $CURRENT_TAG)"
+  echo "gh api output was: $GH_OUT"
   exit 1
 fi
 
