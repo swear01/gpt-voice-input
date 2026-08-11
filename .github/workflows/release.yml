@@ -70,26 +70,21 @@ jobs:
 
       - name: Assert versionCode strictly increased since last release
         run: |
-          NEW_VC=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+          bash scripts/release-check-versioncode.sh \
+            "${{ github.repository }}" \
+            "${{ github.ref_name }}" \
             app/build/outputs/apk/release/app-release.apk \
-            | grep -o "versionCode='[0-9]*'" | head -1 | grep -o '[0-9]*')
-          echo "new versionCode=$NEW_VC"
-          if gh release view latest --repo "${{ github.repository }}" --json tagName > /dev/null 2>&1; then
-            rm -rf /tmp/prev && mkdir -p /tmp/prev
-            gh release download latest --repo "${{ github.repository }}" \
-              --pattern '*.apk' -D /tmp/prev > /dev/null 2>&1 || {
-                echo "no previous APK asset; skipping check"; exit 0
-              }
-            PREV_APK=$(ls /tmp/prev/*.apk 2>/dev/null | head -1)
-            [ -n "$PREV_APK" ] || { echo "no previous APK asset; skipping check"; exit 0; }
-            OLD_VC=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$PREV_APK" \
-              | grep -o "versionCode='[0-9]*'" | head -1 | grep -o '[0-9]*')
-            echo "previous release versionCode=$OLD_VC"
-            test "$NEW_VC" -gt "$OLD_VC" \
-              || { echo "versionCode did not increase ($NEW_VC <= $OLD_VC)"; exit 1; }
-          else
-            echo "no previous release; this is the first one"
-          fi
+            "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+
+      - name: Assert APK ships generic configuration only
+        run: |
+          JSONS=$(unzip -l app/build/outputs/apk/release/app-release.apk \
+            | grep -oE 'assets/[^ ]*\.json' | sed 's|.*assets/||' | sort)
+          echo "asset JSONs: $JSONS"
+          # Structural check (term-free): the only bundled transcription
+          # configuration must be the generic default.json.
+          [ "$JSONS" = "default.json" ] \
+            || { echo "ERROR: non-generic config assets present in APK"; exit 1; }
 
       - name: Rename APK to a predictable asset name
         run: |
