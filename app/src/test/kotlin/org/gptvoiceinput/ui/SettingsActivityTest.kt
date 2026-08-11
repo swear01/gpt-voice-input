@@ -259,7 +259,7 @@ class SettingsActivityTest {
         // Seed key marker + auto-stop + custom profile.
         appContext.getSharedPreferences("secure_api_key", android.content.Context.MODE_PRIVATE)
             .edit().putString("iv", "AAAA").putString("ciphertext", "BBBB").apply()
-        SettingsStore(appContext).autoStopSeconds = 2.4
+        SettingsStore(appContext).setAutoStopSeconds(2.4)
         SettingsStore(appContext).setCustomTerms(listOf("ZXQ-17"))
         ImportedProfileStore(appContext).save(
             TranscriptionProfile(
