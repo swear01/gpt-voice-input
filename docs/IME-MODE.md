@@ -109,32 +109,34 @@ Still below chat heads (documented limitation).
   points are complementary, not interchangeable.
 - No new permissions: still only `RECORD_AUDIO` + `INTERNET`.
 
-## Non-interference with daily typing (researched, decided: fully hidden)
+## Non-interference with daily typing — two explored designs
 
-Requirement: the voice IME must be invisible in the keyboard switcher and
-never disturb normal typing with SwiftKey. Decided design — **both extreme
-flags**:
+### Option 1: fully hidden (superseded — see issue #9)
 
-- `android:isAuxiliary="true"` — auxiliary subtype; the globe cycle only
-  rotates non-auxiliary IMEs (`InputMethodManagerService`:
+Requirement: the voice IME must be invisible in the keyboard switcher.
+Previously decided: both extreme flags:
+
+- `android:isAuxiliary="true"` — the globe cycle only rotates non-auxiliary
+  IMEs (`InputMethodManagerService`:
   `hasMultipleSubtypesForSwitcher(true /* nonAuxOnly */)`).
 - `android:showInInputMethodPicker="false"` — excluded from both the globe
-  cycle and the picker (`InputMethodSubtypeSwitchingController`: `if
+  cycle and the picker (`ImeSubtypeSwitchingController`: `if
   (!imi.shouldShowInInputMethodPicker()) continue;`).
 
-Verified against AOSP `attrs.xml`, `InputMethodInfo`, `ImeSubtypeSwitchingController`,
-`InputMethodManagerService`.
+Consequence: the IME never appears anywhere; the only invocation is System
+settings → On-screen keyboard (apps cannot programmatically switch IMEs).
 
-Consequences (stated honestly):
+### Option 2: in the cycle (exploring, issue #9)
 
-- The IME never appears in the switcher or picker — zero interference.
-- Apps **cannot programmatically switch input methods** (platform security).
-  The only invocation path is System settings → Languages & input →
-  On-screen keyboard → tap GPT Voice Input. We will expose a shortcut button
-  in our Settings that opens `Settings.ACTION_INPUT_METHOD_SETTINGS` so the
-  trip is one screen.
-- The existing `ACTION_RECOGNIZE_SPEECH` Activity (SwiftKey mic) remains the
-  daily entry point; the hidden IME is the chat-head / compatibility path.
+Android's default `MODE_AUTO` switching is recency-based:
+
+> If there was a user action since the last switch, and direction is forward,
+> use MODE_RECENT (most recent to least recent), otherwise MODE_STATIC.
+
+So the globe first returns to the **last-used** IME. A normal (visible)
+voice IME therefore only surfaces in the cycle after deliberate use, and
+post-commit auto-return (`switchToPreviousInputMethod()`) keeps the flow
+clean — non-disruption comes from recency + auto-return, not from hiding.
 
 ## Panel chrome: close (X) instead of globe
 
