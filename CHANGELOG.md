@@ -4,6 +4,23 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.5
+
+- **IME panel redesign (whisperIME-style)**: minimal voice-only panel — large
+  mic, level meter, status/hint, small gear. The Done button is gone:
+  **tapping anywhere on the panel submits** (and retries after an error); the
+  IME auto-returns to the previous keyboard after committing, and the back
+  key cancels + returns.
+- **Insets**: system-bar / language-bar insets are applied to the input view
+  (whisperIME-style margins), so content no longer collides with the
+  language-switch bar / arrows.
+- **Robustness**: null-safe IME window token (was a crash path during
+  dismissal), guarded taps/lifecycle with logging, coroutine scope cancelled
+  on destroy, InputConnection-null retry before returning to the keyboard.
+- **Mic permission**: the IME cannot request permissions itself (services
+  can't) — when missing it guides to Settings, which now requests
+  RECORD_AUDIO on open.
+
 ## v1.0.4
 
 - **FIX: voice IME was never registered** — the IME service was missing the

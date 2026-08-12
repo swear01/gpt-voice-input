@@ -182,6 +182,26 @@ class ImeVoiceControllerTest {
     }
 
     @Test
+    fun `panel tap submits while listening`() {
+        val h = harness()
+        h.controller.start()
+        h.controller.onPanelTap()
+        assertEquals("UNIQUE_TEST_TEXT", h.delivered)
+    }
+
+    @Test
+    fun `panel tap retries after an error`() {
+        val h = harness()
+        h.nextError = TranscriptionException.Network(java.io.IOException("boom"))
+        h.controller.start()
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals(ImeVoiceController.State.ERROR, h.controller.state)
+        h.nextError = null
+        h.controller.onPanelTap()
+        assertEquals("UNIQUE_TEST_TEXT", h.delivered)
+    }
+
+    @Test
     fun `transcription failure moves to error and retry can recover`() {
         val h = harness()
         h.nextError = TranscriptionException.Network(java.io.IOException("boom"))

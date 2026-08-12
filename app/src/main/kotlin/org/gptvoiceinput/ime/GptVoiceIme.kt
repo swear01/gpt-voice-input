@@ -1,10 +1,10 @@
 package org.gptvoiceinput.ime
 
-import android.content.Context
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
 import android.os.Build
-import android.view.inputmethod.InputMethodManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -13,25 +13,31 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.widget.Button
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageButton
 import android.widget.TextView
-import androidx.lifecycle.lifecycleScope
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import org.gptvoiceinput.R
-import org.gptvoiceinput.config.SettingsStore
 import org.gptvoiceinput.ui.SettingsActivity
 
 /**
- * Voice input method (v1.0.0).
+ * Voice input method (v1.0.5).
  *
  * A normal, visible IME in the keyboard cycle whose input view is a
- * voice-only panel (no keys). Reached via the globe key or by tapping the
- * panel (switchToNextInputMethod). Speech is transcribed by gpt-transcribe
- * and committed through the InputConnection; the IME then returns to the
- * previous keyboard automatically.
+ * voice-only panel (no keys). The panel shows the mic level meter, Listening…
+ * / Transcribing… / error states, and a small gear. Tapping anywhere on the
+ * panel submits the current recording (or retries after an error); after the
+ * transcript is committed the IME returns to the previous keyboard
+ * automatically. Back key cancels and returns as well.
  *
  * The IME window layer (TYPE_INPUT_METHOD) is above chat-head overlays, so
- * dictation works in Messenger bubbles etc.
+ * dictation works in Messenger bubbles etc. System-bar / language-bar insets
+ * are applied to the input view (whisperIME-style).
  */
 class GptVoiceIme : InputMethodService() {
 
@@ -41,13 +47,10 @@ class GptVoiceIme : InputMethodService() {
     private lateinit var micIcon: View
     private lateinit var meterContainer: View
     private lateinit var meterBars: List<View>
-    private lateinit var errorButtons: View
-    private lateinit var retryButton: Button
-    private lateinit var cancelButton: Button
-    private lateinit var openSettingsErrorButton: Button
-    private lateinit var doneButton: Button
 
     private var controller: ImeVoiceController? = null
+    private var waitingForPermission = false
+    private val scope = MainScope()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
@@ -63,47 +66,71 @@ class GptVoiceIme : InputMethodService() {
         meterBars = (meterContainer as ViewGroup).let { vg ->
             (0 until vg.childCount).map { vg.getChildAt(it) }
         }
-        errorButtons = view.findViewById(R.id.error_buttons)
-        retryButton = view.findViewById(R.id.retry_button)
-        cancelButton = view.findViewById(R.id.cancel_button)
-        openSettingsErrorButton = view.findViewById(R.id.open_settings_error_button)
-        doneButton = view.findViewById(R.id.done_button)
         meterBars.forEach { it.alpha = BAR_DIM_ALPHA }
 
-        // Tap anywhere on the panel (except controls) = next input method.
-        view.setOnClickListener { switchToNextIme() }
-        view.findViewById<ImageButton>(R.id.gear_button).setOnClickListener {
-            startActivity(
-                Intent(this, SettingsActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
-        doneButton.setOnClickListener { controller?.submit() }
-        retryButton.setOnClickListener { controller?.retry() }
-        cancelButton.setOnClickListener { controller?.cancel(); switchToNextIme() }
-        openSettingsErrorButton.setOnClickListener {
-            startActivity(
-                Intent(this, SettingsActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+        // Keep content clear of the system bars / language bar (whisperIME-style).
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val mlp = v.layoutParams as? ViewGroup.MarginLayoutParams
+            if (mlp != null) {
+                mlp.leftMargin = insets.left
+                mlp.bottomMargin = insets.bottom
+                mlp.rightMargin = insets.right
+                v.layoutParams = mlp
+            }
+            WindowInsetsCompat.CONSUMED
         }
 
+        // Tap anywhere = submit (listening) / retry (error) / settings
+        // (when waiting for the mic permission).
+        view.setOnClickListener {
+            if (waitingForPermission) {
+                openSettings()
+            } else {
+                runCatching { controller?.onPanelTap() }
+                    .onFailure { Log.e(TAG, "panel tap failed", it) }
+            }
+        }
+        view.findViewById<ImageButton>(R.id.gear_button).setOnClickListener { openSettings() }
+
         if (controller == null) {
-            controller = ImeVoiceController.create(this, mainScope(), imeCallbacks)
+            controller = ImeVoiceController.create(this, scope, imeCallbacks)
         }
         renderState(ImeVoiceController.State.IDLE)
         return view
     }
 
+    override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        lastMeterUiMs = 0L
+        waitingForPermission = false
+        if (hasMicPermission()) {
+            controller?.start()
+        } else {
+            // Services cannot request permissions directly; guide the user to
+            // Settings (which requests RECORD_AUDIO on open).
+            waitingForPermission = true
+            renderState(ImeVoiceController.State.ERROR)
+            hintText.setText(R.string.hint_no_permission)
+        }
+    }
+
+    private fun hasMicPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
     private val imeCallbacks = object : ImeVoiceController.Callbacks {
         override fun onStateChanged(state: ImeVoiceController.State) {
-            renderState(state)
+            runCatching { renderState(state) }
+                .onFailure { Log.e(TAG, "renderState failed", it) }
             when (state) {
                 ImeVoiceController.State.FINISHED -> {
-                    // Cancel/session end: leave the IME and return to the
+                    // Session ended (cancel/back): leave and return to the
                     // previous keyboard.
-                    requestHideSelf(0)
-                    switchToPreviousIme()
+                    runCatching {
+                        requestHideSelf(0)
+                        switchToPreviousIme()
+                    }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
                 }
                 else -> Unit
             }
@@ -113,7 +140,7 @@ class GptVoiceIme : InputMethodService() {
             val now = android.os.SystemClock.uptimeMillis()
             if (now - lastMeterUiMs < METER_UI_INTERVAL_MS) return
             lastMeterUiMs = now
-            mainHandler.post { renderMeter(level01) }
+            mainHandler.post { runCatching { renderMeter(level01) } }
         }
 
         override fun onTranscript(transcript: String) {
@@ -121,16 +148,24 @@ class GptVoiceIme : InputMethodService() {
             val ic: InputConnection? = currentInputConnection
             if (ic != null) {
                 ic.commitText(transcript, 1)
+            } else {
+                // Editor focus lost at the last moment — retry once shortly.
+                Log.w(TAG, "deliver: InputConnection null, retrying")
+                mainHandler.postDelayed({
+                    currentInputConnection?.commitText(transcript, 1)
+                    finishAndReturn()
+                }, 300)
+                return
             }
-            requestHideSelf(0)
-            switchToPreviousIme()
+            finishAndReturn()
         }
     }
 
-    override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
-        super.onStartInputView(info, restarting)
-        lastMeterUiMs = 0L
-        controller?.start()
+    private fun finishAndReturn() {
+        runCatching {
+            requestHideSelf(0)
+            switchToPreviousIme()
+        }.onFailure { Log.e(TAG, "finishAndReturn failed", it) }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -146,45 +181,27 @@ class GptVoiceIme : InputMethodService() {
 
     override fun onDestroy() {
         controller?.cancel()
+        scope.cancel()
         super.onDestroy()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK && event?.repeatCount == 0) {
             controller?.cancel()
-            switchToNextIme()
+            runCatching { switchToPreviousIme() }
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    // ------------------------------------------- IME switching helpers
-
-    /** API 28+: InputMethodService.switchToNextInputMethod; older: the
-     *  token-based InputMethodManager variant. */
-    private fun switchToNextIme(): Boolean {
-        if (Build.VERSION.SDK_INT >= 28) {
-            @Suppress("NewApi")
-            return switchToNextInputMethod(false)
-        }
-        @Suppress("DEPRECATION")
-        return getSystemService(InputMethodManager::class.java)
-            .switchToNextInputMethod(imeWindowToken(), false)
+    private fun openSettings() {
+        runCatching {
+            startActivity(
+                Intent(this, SettingsActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.onFailure { Log.e(TAG, "open settings failed", it) }
     }
-
-    private fun switchToPreviousIme(): Boolean {
-        if (Build.VERSION.SDK_INT >= 28) {
-            @Suppress("NewApi")
-            return switchToPreviousInputMethod()
-        }
-        @Suppress("DEPRECATION")
-        // Pre-28 API is named switchToLastInputMethod (deprecated in 28).
-        return getSystemService(InputMethodManager::class.java)
-            .switchToLastInputMethod(imeWindowToken())
-    }
-
-    private fun imeWindowToken(): android.os.IBinder =
-        getWindow().getWindow()!!.getAttributes().token
 
     // ------------------------------------------------------------------ UI
 
@@ -192,38 +209,29 @@ class GptVoiceIme : InputMethodService() {
         panel ?: return
         when (state) {
             ImeVoiceController.State.IDLE -> {
-                statusText.setText(R.string.hint_tap_to_submit)
-                hintText.setText(R.string.hint_no_key)
+                micIcon.visibility = View.VISIBLE
+                meterContainer.visibility = View.GONE
+                statusText.setText(R.string.status_listening)
+                hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.LISTENING -> {
                 micIcon.visibility = View.VISIBLE
                 meterContainer.visibility = View.VISIBLE
-                doneButton.visibility = View.VISIBLE
-                errorButtons.visibility = View.GONE
                 statusText.setText(R.string.status_listening)
                 hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.PROCESSING -> {
-                micIcon.visibility = View.VISIBLE
                 meterContainer.visibility = View.GONE
-                doneButton.visibility = View.GONE
-                errorButtons.visibility = View.GONE
                 statusText.setText(R.string.status_transcribing)
                 hintText.setText("")
             }
             ImeVoiceController.State.ERROR -> {
                 meterContainer.visibility = View.GONE
-                doneButton.visibility = View.GONE
-                errorButtons.visibility = View.VISIBLE
-                retryButton.visibility = View.VISIBLE
-                openSettingsErrorButton.visibility = View.GONE
                 statusText.setText(R.string.status_transcribe_failed)
-                hintText.setText(R.string.hint_error_generic)
+                hintText.setText(R.string.hint_tap_to_retry)
             }
             ImeVoiceController.State.FINISHED -> {
                 meterContainer.visibility = View.GONE
-                doneButton.visibility = View.GONE
-                errorButtons.visibility = View.GONE
             }
         }
     }
@@ -244,8 +252,34 @@ class GptVoiceIme : InputMethodService() {
         }
     }
 
-    private fun mainScope(): kotlinx.coroutines.CoroutineScope =
-        kotlinx.coroutines.MainScope()
+    // ------------------------------------------- IME switching helpers
+
+    private fun switchToNextIme(): Boolean {
+        if (Build.VERSION.SDK_INT >= 28) {
+            @Suppress("NewApi")
+            return switchToNextInputMethod(false)
+        }
+        val token = imeWindowToken() ?: return false
+        @Suppress("DEPRECATION")
+        return getSystemService(InputMethodManager::class.java)
+            .switchToNextInputMethod(token, false)
+    }
+
+    private fun switchToPreviousIme(): Boolean {
+        if (Build.VERSION.SDK_INT >= 28) {
+            @Suppress("NewApi")
+            return switchToPreviousInputMethod()
+        }
+        val token = imeWindowToken() ?: return false
+        @Suppress("DEPRECATION")
+        // Pre-28 API is named switchToLastInputMethod (deprecated in 28).
+        return getSystemService(InputMethodManager::class.java)
+            .switchToLastInputMethod(token)
+    }
+
+    /** Null-safe: the IMS window may be gone during dismissal. */
+    private fun imeWindowToken(): android.os.IBinder? =
+        getWindow()?.getWindow()?.getAttributes()?.token
 
     companion object {
         private const val TAG = "GptVoiceIme"

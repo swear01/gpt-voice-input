@@ -93,6 +93,15 @@ class ImeVoiceController(
         finishAndTranscribe()
     }
 
+    /** Panel tap: submit while listening, retry after an error. */
+    fun onPanelTap() {
+        when (state) {
+            State.LISTENING -> submit()
+            State.ERROR -> retry()
+            else -> Unit
+        }
+    }
+
     /** Cancels the session (IME closed / switched away): no API request. */
     fun cancel() {
         if (state == State.FINISHED) return

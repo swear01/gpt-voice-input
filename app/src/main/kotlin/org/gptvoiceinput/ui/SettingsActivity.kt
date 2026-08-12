@@ -1,5 +1,7 @@
 package org.gptvoiceinput.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
@@ -11,6 +13,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -74,6 +78,18 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        // The IME cannot request permissions itself; Settings is the place
+        // where RECORD_AUDIO is granted (also needed by the IME).
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_MIC_PERMISSION,
+            )
+        }
 
         secureStore = SecureApiKeyStore(this)
         settingsStore = SettingsStore(this)
@@ -430,6 +446,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val REQUEST_MIC_PERMISSION = 1001
         private const val SAFE_EXPORT_FILENAME = "gpt-voice-input-settings.json"
         private const val FULL_BACKUP_FILENAME = "gpt-voice-input-personal.json"
     }

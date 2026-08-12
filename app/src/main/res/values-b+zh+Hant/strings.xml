@@ -15,6 +15,7 @@
     <string name="hint_no_key">開啟設定以繼續</string>
     <string name="status_no_permission">需要麥克風權限</string>
     <string name="hint_no_permission">請在系統設定中允許麥克風存取</string>
+    <string name="hint_tap_to_retry">點擊重試</string>
     <string name="hint_tap_to_submit">點擊送出</string>
     <string name="hint_error_generic">發生錯誤，請再試一次。</string>
     <string name="done">完成</string>
