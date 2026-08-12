@@ -56,6 +56,9 @@ class GptVoiceIme : InputMethodService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
+    private var sessionGeneration = 0
+
+    @Volatile
     private var lastMeterUiMs = 0L
 
     override fun onCreateInputView(): View {
@@ -114,6 +117,7 @@ class GptVoiceIme : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        sessionGeneration++
         lastMeterUiMs = 0L
         waitingForPermission = false
         currentError = null
@@ -134,8 +138,9 @@ class GptVoiceIme : InputMethodService() {
 
     private val imeCallbacks = object : ImeVoiceController.Callbacks {
         override fun onStateChanged(state: ImeVoiceController.State) {
+            val generation = sessionGeneration
             val action = Runnable {
-                if (controller?.state != state) return@Runnable
+                if (sessionGeneration != generation || controller?.state != state) return@Runnable
                 runCatching { renderState(state) }
                     .onFailure { Log.e(TAG, "renderState failed", it) }
                 if (state == ImeVoiceController.State.FINISHED) {
