@@ -32,8 +32,8 @@ class MicLevelEstimatorTest {
     @Test
     fun `low amplitude maps to a low visible level`() {
         val estimator = MicLevelEstimator()
-        // amplitude 1000 -> peak ≈ -30 dBFS -> ≈ 0.24 normalized.
-        feed(estimator, 24, sineFrame(amplitude = 1000))
+        // amplitude 300 -> peak ≈ -40.8 dBFS -> ≈ 0.16 normalized.
+        feed(estimator, 24, sineFrame(amplitude = 300))
         assertTrue(
             "low level expected, got ${estimator.currentLevel()}",
             estimator.currentLevel() in 0.05f..0.45f,
@@ -41,9 +41,20 @@ class MicLevelEstimatorTest {
     }
 
     @Test
+    fun `normal speech level reads near full`() {
+        val estimator = MicLevelEstimator()
+        // amplitude 3000 -> peak ≈ -20.8 dBFS (typical AGC'd speech) -> ≈ 0.9.
+        feed(estimator, 24, sineFrame(amplitude = 3000))
+        assertTrue(
+            "normal speech should read near full, got ${estimator.currentLevel()}",
+            estimator.currentLevel() > 0.75f,
+        )
+    }
+
+    @Test
     fun `larger amplitude is strictly higher`() {
         val quiet = MicLevelEstimator().let {
-            feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
+            feed(it, 24, sineFrame(amplitude = 300)); it.currentLevel()
         }
         val loud = MicLevelEstimator().let {
             feed(it, 24, sineFrame(amplitude = 8000)); it.currentLevel()
@@ -72,15 +83,17 @@ class MicLevelEstimatorTest {
     @Test
     fun `peak is held then decays in silence - classic meter fall`() {
         val estimator = MicLevelEstimator()
-        feed(estimator, 12, sineFrame(amplitude = 8000))
+        // Enough loud frames for the display to converge to the held peak
+        // (~10 emissions), so the subsequent fall is monotonic.
+        feed(estimator, 60, sineFrame(amplitude = 8000))
         val afterSpeech = estimator.currentLevel()
-        assertTrue("speech should raise the meter, got $afterSpeech", afterSpeech > 0.4f)
+        assertTrue("speech should raise the meter, got $afterSpeech", afterSpeech > 0.9f)
 
         // Silence: the held peak decays each emission; level must fall
         // monotonically and settle near the floor.
         var previous = afterSpeech
         var monotonic = true
-        repeat(10) {
+        repeat(12) {
             feed(estimator, 6, silent)
             val now = estimator.currentLevel()
             if (now > previous + 0.0001f) monotonic = false

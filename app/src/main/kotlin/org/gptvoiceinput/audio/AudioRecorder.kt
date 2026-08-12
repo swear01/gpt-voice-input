@@ -67,7 +67,6 @@ class AudioRecorder(
     private var levelEstimator: MicLevelEstimator? = null
     private var startRealtimeMs = 0L
 
-    val sampleRate: Int get() = record?.sampleRate ?: 0
     val sourceDescription: String get() = sourceName(usedSource)
 
     @Volatile

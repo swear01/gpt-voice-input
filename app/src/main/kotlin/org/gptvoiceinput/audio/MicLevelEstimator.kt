@@ -14,16 +14,18 @@ import kotlin.math.log10
  *  - **peak hold with decay**: the frame peak is held; every
  *    [HOLD_FRAMES] frames the held peak is emitted and then decayed, so the
  *    meter jumps up on speech and falls off smoothly in silence,
- *  - the emitted peak is converted to dBFS and normalized over a usable
- *    floor (here -40 dBFS), giving a good spread across quiet speech
- *    (~0.1), normal speech (~0.5) and loud speech (~0.75+).
+ *  - the emitted peak (dBFS) is mapped over a **voice-calibrated band**: the
+ *    floor is well below normal speech and the ceiling is set so that normal
+ *    speaking (with the AGC'd VOICE_RECOGNITION source) reads near full.
  *
  * The uploaded WAV never passes through this; the estimator is fed only the
  * downsampled analysis copy (see AudioRecorder).
  */
 class MicLevelEstimator(
-    /** dBFS below which the meter reads zero (peak-based). */
+    /** dBFS at which the meter reads zero. */
     private val floorDb: Float = DEFAULT_FLOOR_DB,
+    /** dBFS at which the meter reads full (normal speech ≈ ceiling). */
+    private val ceilingDb: Float = DEFAULT_CEILING_DB,
     /** Emission cadence in 20 ms frames (~100-120 ms, like WebRTC's ~9 Hz). */
     private val holdFrames: Int = DEFAULT_HOLD_FRAMES,
     /** Decay factor applied to the held peak after each emission (WebRTC: >>=2). */
@@ -67,7 +69,8 @@ class MicLevelEstimator(
     private fun dbToLevel(linear: Float): Float {
         if (linear <= 0f) return 0f
         val db = 20.0 * log10(linear.toDouble())
-        return ((db - floorDb) / -floorDb).toFloat().coerceIn(0f, 1f)
+        val span = ceilingDb - floorDb
+        return ((db - floorDb) / span).toFloat().coerceIn(0f, 1f)
     }
 
     /** Current smoothed level without consuming a frame. */
@@ -81,7 +84,12 @@ class MicLevelEstimator(
 
     companion object {
         private const val MAX_PCM_AMPLITUDE = 32768.0
-        private const val DEFAULT_FLOOR_DB = -40f
+
+        // Voice-calibrated band: -45 dBFS and below reads zero; -18 dBFS and
+        // above (normal speech with the AGC'd VOICE_RECOGNITION source)
+        // reads full. Quiet speech moves the meter, loud saturates.
+        private const val DEFAULT_FLOOR_DB = -45f
+        private const val DEFAULT_CEILING_DB = -18f
         private const val DEFAULT_HOLD_FRAMES = 6 // ~120 ms at 20 ms frames
         private const val DEFAULT_HOLD_DECAY = 0.25f // WebRTC's >>= 2
         private const val DEFAULT_ATTACK = 0.5f

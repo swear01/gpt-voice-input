@@ -4,6 +4,16 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.1
+
+- **APK size**: release builds now run R8 minification + resource shrinking
+  (3.2 MB → ~0.9 MB) with all manifest components verified intact; dead code
+  removed (unused recorder property, unformatted error string fixed).
+- **Mic meter calibration**: normal speech now reads near full. The meter
+  maps the peak dBFS over a voice-calibrated band (-45 dBFS floor, -18 dBFS
+  ceiling): quiet speech moves the meter, normal AGC'd speech ≈ full, loud
+  saturates.
+
 ## v1.0.0
 
 - **Voice input method (IME)**: the app now also ships a normal, visible

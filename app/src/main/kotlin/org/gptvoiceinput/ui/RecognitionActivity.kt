@@ -524,7 +524,7 @@ class RecognitionActivity : AppCompatActivity() {
             retryButton.visibility = View.GONE
             openSettingsErrorButton.visibility = View.VISIBLE
         } else {
-            hintText.setText(errorText(error))
+            hintText.text = errorText(error)
             retryButton.visibility = if (wavReady && tempWav.exists()) View.VISIBLE else View.GONE
             openSettingsErrorButton.visibility = View.GONE
         }
@@ -532,14 +532,14 @@ class RecognitionActivity : AppCompatActivity() {
     }
 
     /** Maps structured errors to stable, localized, app-owned text. */
-    private fun errorText(error: TranscriptionException): Int = when (error) {
-        is TranscriptionException.Unauthorized -> R.string.error_unauthorized
-        is TranscriptionException.RateLimited -> R.string.error_rate_limited
-        is TranscriptionException.ServerError -> R.string.error_server
-        is TranscriptionException.ApiError -> R.string.error_api
-        is TranscriptionException.Timeout -> R.string.error_timeout
-        is TranscriptionException.Network -> R.string.error_network
-        is TranscriptionException.Protocol -> R.string.hint_error_generic
+    private fun errorText(error: TranscriptionException): String = when (error) {
+        is TranscriptionException.Unauthorized -> getString(R.string.error_unauthorized)
+        is TranscriptionException.RateLimited -> getString(R.string.error_rate_limited)
+        is TranscriptionException.ServerError -> getString(R.string.error_server)
+        is TranscriptionException.ApiError -> getString(R.string.error_api, error.code)
+        is TranscriptionException.Timeout -> getString(R.string.error_timeout)
+        is TranscriptionException.Network -> getString(R.string.error_network)
+        is TranscriptionException.Protocol -> getString(R.string.hint_error_generic)
     }
 
     /**
