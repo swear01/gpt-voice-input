@@ -85,11 +85,14 @@ class MicLevelEstimator(
     companion object {
         private const val MAX_PCM_AMPLITUDE = 32768.0
 
-        // Voice-calibrated band: -45 dBFS and below reads zero; -18 dBFS and
-        // above (normal speech with the AGC'd VOICE_RECOGNITION source)
-        // reads full. Quiet speech moves the meter, loud saturates.
-        private const val DEFAULT_FLOOR_DB = -45f
-        private const val DEFAULT_CEILING_DB = -18f
+        // Voice-calibrated band following the broadcast/K-system convention
+        // (nominal speech level ≈ -20 dBFS = full scale):
+        //   ≤ -40 dBFS (silence, ambient, whisper)  → 0
+        //   -30 dBFS (quiet speech)                  → 0.5
+        //   -20 dBFS (normal AGC'd speech)           → 1.0 (full)
+        //   louder                                   → saturated 1.0
+        private const val DEFAULT_FLOOR_DB = -40f
+        private const val DEFAULT_CEILING_DB = -20f
         private const val DEFAULT_HOLD_FRAMES = 6 // ~120 ms at 20 ms frames
         private const val DEFAULT_HOLD_DECAY = 0.25f // WebRTC's >>= 2
         private const val DEFAULT_ATTACK = 0.5f

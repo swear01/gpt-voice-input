@@ -30,31 +30,41 @@ class MicLevelEstimatorTest {
     }
 
     @Test
+    fun `silence and whisper read zero`() {
+        val estimator = MicLevelEstimator()
+        feed(estimator, 24, silent)
+        assertEquals(0f, estimator.currentLevel(), 0.0001f)
+        // amplitude 300 -> peak ≈ -40.8 dBFS — below the -40 dBFS floor.
+        feed(estimator, 24, sineFrame(amplitude = 300))
+        assertEquals("whisper must read zero", 0f, estimator.currentLevel(), 0.0001f)
+    }
+
+    @Test
     fun `low amplitude maps to a low visible level`() {
         val estimator = MicLevelEstimator()
-        // amplitude 300 -> peak ≈ -40.8 dBFS -> ≈ 0.16 normalized.
-        feed(estimator, 24, sineFrame(amplitude = 300))
+        // amplitude 1000 -> peak ≈ -30.3 dBFS -> ≈ 0.48 normalized.
+        feed(estimator, 24, sineFrame(amplitude = 1000))
         assertTrue(
             "low level expected, got ${estimator.currentLevel()}",
-            estimator.currentLevel() in 0.05f..0.45f,
+            estimator.currentLevel() in 0.2f..0.7f,
         )
     }
 
     @Test
-    fun `normal speech level reads near full`() {
+    fun `normal speech level reads full`() {
         val estimator = MicLevelEstimator()
-        // amplitude 3000 -> peak ≈ -20.8 dBFS (typical AGC'd speech) -> ≈ 0.9.
+        // amplitude 3000 -> peak ≈ -20.8 dBFS (typical AGC'd speech) -> ≈ 0.96.
         feed(estimator, 24, sineFrame(amplitude = 3000))
         assertTrue(
-            "normal speech should read near full, got ${estimator.currentLevel()}",
-            estimator.currentLevel() > 0.75f,
+            "normal speech should read full, got ${estimator.currentLevel()}",
+            estimator.currentLevel() > 0.85f,
         )
     }
 
     @Test
     fun `larger amplitude is strictly higher`() {
         val quiet = MicLevelEstimator().let {
-            feed(it, 24, sineFrame(amplitude = 300)); it.currentLevel()
+            feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
         }
         val loud = MicLevelEstimator().let {
             feed(it, 24, sineFrame(amplitude = 8000)); it.currentLevel()
@@ -93,7 +103,7 @@ class MicLevelEstimatorTest {
         // monotonically and settle near the floor.
         var previous = afterSpeech
         var monotonic = true
-        repeat(12) {
+        repeat(14) {
             feed(estimator, 6, silent)
             val now = estimator.currentLevel()
             if (now > previous + 0.0001f) monotonic = false

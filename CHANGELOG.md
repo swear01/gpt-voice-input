@@ -4,6 +4,16 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.2
+
+- **Mic meter scale fixed (K-system convention)**: the meter maps peak dBFS
+  over floor -40 dBFS → ceiling -20 dBFS, so silence/ambient/whisper read 0,
+  quiet speech ~half, and normal AGC'd speech (~-20 dBFS) reads full.
+- Verified against research: gpt-transcribe/Whisper does not normalize input
+  loudness internally; the recommended speech level is roughly -20 to -16
+  dBFS RMS with peaks -10 to -6 dBFS and no clipping. The VOICE_RECOGNITION
+  platform AGC delivers exactly this band — no app-side gain is added.
+
 ## v1.0.1
 
 - **APK size**: release builds now run R8 minification + resource shrinking
