@@ -37,10 +37,10 @@ class SettingsStoreTest {
     // ------------------------------------------------------------ basics
 
     @Test
-    fun `fresh install defaults to 1 point 8 seconds`() {
+    fun `fresh install defaults to 2 point 5 seconds`() {
         val s = freshStore()
-        assertEquals(1800, s.autoStopMs)
-        assertEquals(1.8, s.autoStopSeconds, 0.0)
+        assertEquals(2500, s.autoStopMs)
+        assertEquals(2.5, s.autoStopSeconds, 0.0)
     }
 
     @Test
@@ -105,8 +105,9 @@ class SettingsStoreTest {
     fun `legacy floats for every step migrate to the nearest option`() {
         val steps = listOf(
             1.0f, 1.2f, 1.4f, 1.6f, 1.8f, 2.0f, 2.2f, 2.4f, 2.6f, 2.8f, 3.0f,
+            3.2f, 3.4f, 3.6f, 3.8f, 4.0f, 4.2f, 4.4f, 4.6f, 4.8f, 5.0f,
         )
-        val expected = SettingsStore.AUTO_STOP_OPTIONS_MS.take(11)
+        val expected = SettingsStore.AUTO_STOP_OPTIONS_MS.take(21)
         for ((i, value) in steps.withIndex()) {
             // Simulate the float representation error the device actually saw.
             val store = legacyStore(value + 0.0000001f)
@@ -121,16 +122,16 @@ class SettingsStoreTest {
 
     @Test
     fun `out of range legacy value falls back to default not off`() {
-        assertEquals(1800, legacyStore(5.0f).autoStopMs)
-        assertEquals(1800, legacyStore(0.4f).autoStopMs)
-        assertEquals(1800, legacyStore(-3.0f).autoStopMs)
+        assertEquals(2500, legacyStore(6.0f).autoStopMs)
+        assertEquals(2500, legacyStore(0.4f).autoStopMs)
+        assertEquals(2500, legacyStore(-3.0f).autoStopMs)
     }
 
     @Test
     fun `corrupt non-float legacy value falls back to default not off`() {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
             .edit().clear().putString("auto_stop_seconds", "garbage").apply()
-        assertEquals(1800, SettingsStore(context).autoStopMs)
+        assertEquals(2500, SettingsStore(context).autoStopMs)
     }
 
     @Test
@@ -149,15 +150,15 @@ class SettingsStoreTest {
             assertEquals(ms, SettingsStore.secondsToMs(seconds))
         }
         assertEquals(0, SettingsStore.secondsToMs(0.0))
-        assertEquals(1800, SettingsStore.secondsToMs(-0.5)) // corrupt negative -> default, not OFF
+        assertEquals(2500, SettingsStore.secondsToMs(-0.5)) // corrupt negative -> default, not OFF
     }
 
     @Test
     fun `off-grid seconds round to nearest supported step`() {
         assertEquals(1400, SettingsStore.secondsToMs(1.45))
         assertEquals(1600, SettingsStore.secondsToMs(1.55))
-        assertEquals(1800, SettingsStore.secondsToMs(Double.NaN))
-        assertEquals(1800, SettingsStore.secondsToMs(Double.POSITIVE_INFINITY))
+        assertEquals(2500, SettingsStore.secondsToMs(Double.NaN))
+        assertEquals(2500, SettingsStore.secondsToMs(Double.POSITIVE_INFINITY))
     }
 
     // ------------------------------------------------------- endpoint delay

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="recognition_bg">#0F1419</color>
-    <color name="recognition_fg">#F5F7FA</color>
+    <color name="recognition_fg">#FFFFFF</color>
     <color name="recognition_fg_dim">#9AA7B4</color>
 
     <color name="primary">#0F172A</color>
@@ -14,4 +14,5 @@
     <color name="key_configured">#1E7A46</color>
     <color name="key_not_configured">#9AA7B4</color>
     <color name="meter_fill">#2DD4BF</color>
+    <color name="voice_ring">#E53935</color>
 </resources>

@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Voice-only IME panel (v1.0.5). Minimal, whisperIME-style: a large mic
-    indicator, the level meter, status/hint text, and a small gear. No Done
-    button: tapping anywhere on the panel submits (or retries on error); the
-    IME auto-returns to the previous keyboard after committing. System-bar /
-    language-bar insets are applied in code.
+    Voice-only IME panel (v1.0.7), Google-voice-style: a red ring around the
+    mic that expands with the input level (invisible when silent), status/hint
+    text, and a small white gear. Tapping anywhere submits (or retries);
+    the IME auto-returns to the previous keyboard after committing.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -29,58 +28,54 @@
         android:contentDescription="@string/cd_settings"
         android:padding="10dp"
         android:src="@drawable/ic_settings"
-        app:tint="@color/recognition_fg_dim" />
+        app:tint="@color/recognition_fg" />
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
+        android:gravity="center">
+
+        <View
+            android:id="@+id/voice_ring"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:background="@drawable/voice_ring"
+            android:alpha="0" />
 
         <ImageView
             android:id="@+id/mic_icon"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
             android:contentDescription="@string/cd_mic"
             android:src="@drawable/ic_mic"
             app:tint="@color/recognition_fg" />
 
         <LinearLayout
-            android:id="@+id/mic_level_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="16dp"
             android:gravity="center"
-            android:orientation="horizontal"
-            android:visibility="gone">
+            android:orientation="vertical">
 
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
-            <View style="@style/MicBar" />
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/recognition_fg"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/hint_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:maxLines="2"
+                android:textColor="@color/recognition_fg_dim"
+                android:textSize="14sp" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/status_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="@color/recognition_fg"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/hint_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:gravity="center"
-            android:maxLines="2"
-            android:textColor="@color/recognition_fg_dim"
-            android:textSize="14sp" />
-    </LinearLayout>
+    </FrameLayout>
 </LinearLayout>

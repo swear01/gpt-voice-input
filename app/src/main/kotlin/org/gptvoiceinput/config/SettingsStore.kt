@@ -87,11 +87,11 @@ class SettingsStore(context: Context) {
         private const val PREFS_NAME = "settings"
 
         const val AUTO_STOP_OFF_MS = 0
-        const val DEFAULT_AUTO_STOP_MS = 1800
+        const val DEFAULT_AUTO_STOP_MS = 2500
 
-        /** Slider positions: 1.0s..3.0s in 0.2 steps, then OFF. Exact ms. */
+        /** Slider positions: 1.0s..5.0s in 0.2 steps, then OFF. Exact ms. */
         val AUTO_STOP_OPTIONS_MS: List<Int> =
-            (0..10).map { 1000 + it * 200 } + AUTO_STOP_OFF_MS
+            (0..20).map { 1000 + it * 200 } + AUTO_STOP_OFF_MS
 
         /**
          * Maps a seconds value to exact milliseconds: exactly 0 → OFF;
@@ -104,7 +104,7 @@ class SettingsStore(context: Context) {
             if (seconds == 0.0) return AUTO_STOP_OFF_MS
             if (seconds < 0.0) return DEFAULT_AUTO_STOP_MS
             val idx = ((seconds - 1.0) / 0.2).roundToInt()
-            if (idx !in 0..10) return DEFAULT_AUTO_STOP_MS
+            if (idx !in 0..20) return DEFAULT_AUTO_STOP_MS
             return 1000 + idx * 200
         }
 

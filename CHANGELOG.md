@@ -4,6 +4,19 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.7
+
+- **IME panel visuals**: gear and mic are pure white on the dark panel;
+  the gesture/nav bar is painted with the panel color (no more white bar
+  under the keyboard); system-bar insets keep content clear of the
+  language-switch bar.
+- **Google-voice-style speaking ring**: a red ring around the mic appears
+  only while speaking and expands/brightens with the input level — normal
+  speech reaches full size (ceiling at ~-20 dBFS); silent = invisible.
+- **Auto-stop range extended**: 1.0–5.0 s in 0.2 s steps (was 1.0–3.0),
+  default 2.5 s (was 1.8) so natural pauses during dictation no longer
+  trigger early submission. Legacy values migrate as before.
+
 ## v1.0.6
 
 - **Classified IME errors**: failures are now typed (no API key, recording

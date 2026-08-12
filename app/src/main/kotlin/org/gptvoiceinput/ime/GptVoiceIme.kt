@@ -45,12 +45,12 @@ class GptVoiceIme : InputMethodService() {
     private lateinit var statusText: TextView
     private lateinit var hintText: TextView
     private lateinit var micIcon: View
-    private lateinit var meterContainer: View
-    private lateinit var meterBars: List<View>
+    private lateinit var voiceRing: View
 
     private var controller: ImeVoiceController? = null
     private var waitingForPermission = false
     private var currentError: ImeVoiceController.ImeError? = null
+    private var navBarPainted = false
     private val scope = MainScope()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -60,14 +60,14 @@ class GptVoiceIme : InputMethodService() {
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.view_voice_panel, null)
         panel = view
+        paintNavigationBarLikeKeyboard()
         statusText = view.findViewById(R.id.status_text)
         hintText = view.findViewById(R.id.hint_text)
         micIcon = view.findViewById(R.id.mic_icon)
-        meterContainer = view.findViewById(R.id.mic_level_container)
-        meterBars = (meterContainer as ViewGroup).let { vg ->
-            (0 until vg.childCount).map { vg.getChildAt(it) }
-        }
-        meterBars.forEach { it.alpha = BAR_DIM_ALPHA }
+        voiceRing = view.findViewById(R.id.voice_ring)
+        // Scale from the center (Google-voice style ring).
+        voiceRing.pivotX = voiceRing.width / 2f
+        voiceRing.pivotY = voiceRing.height / 2f
 
         // Keep content clear of the system bars / language bar (whisperIME-style).
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
@@ -201,6 +201,22 @@ class GptVoiceIme : InputMethodService() {
         return super.onKeyDown(keyCode, event)
     }
 
+    /** Match the gesture/nav bar to the keyboard panel so no white bar shows. */
+    private fun paintNavigationBarLikeKeyboard() {
+        if (navBarPainted) return
+        navBarPainted = true
+        runCatching {
+            val w = getWindow()?.getWindow() ?: return
+            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            w.setNavigationBarColor(
+                androidx.core.content.ContextCompat.getColor(this, R.color.recognition_bg),
+            )
+            w.decorView.systemUiVisibility =
+                w.decorView.systemUiVisibility and
+                    android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+        }.onFailure { Log.e(TAG, "nav bar paint failed", it) }
+    }
+
     private fun openSettings() {
         runCatching {
             startActivity(
@@ -228,29 +244,29 @@ class GptVoiceIme : InputMethodService() {
         panel ?: return
         when (state) {
             ImeVoiceController.State.ERROR -> {
-                meterContainer.visibility = View.GONE
+                voiceRing.visibility = View.INVISIBLE
                 statusText.setText(R.string.status_transcribe_failed)
                 hintText.setText(errorHint())
             }
             ImeVoiceController.State.IDLE -> {
                 micIcon.visibility = View.VISIBLE
-                meterContainer.visibility = View.GONE
+                voiceRing.visibility = View.INVISIBLE
                 statusText.setText(R.string.status_listening)
                 hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.LISTENING -> {
                 micIcon.visibility = View.VISIBLE
-                meterContainer.visibility = View.VISIBLE
+                voiceRing.visibility = View.VISIBLE
                 statusText.setText(R.string.status_listening)
                 hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.PROCESSING -> {
-                meterContainer.visibility = View.GONE
+                voiceRing.visibility = View.INVISIBLE
                 statusText.setText(R.string.status_transcribing)
                 hintText.setText("")
             }
             ImeVoiceController.State.FINISHED -> {
-                meterContainer.visibility = View.GONE
+                voiceRing.visibility = View.INVISIBLE
             }
         }
     }
@@ -269,20 +285,19 @@ class GptVoiceIme : InputMethodService() {
         null -> getString(R.string.hint_tap_to_retry)
     }
 
+    /**
+     * Google-voice-style ring: invisible when silent, expands and brightens
+     * with the input level; normal speech (level ~1) reaches full size.
+     */
     private fun renderMeter(level01: Float) {
-        if (meterContainer.visibility != View.VISIBLE) return
+        if (voiceRing.visibility != View.VISIBLE) return
         val level = if (level01.isNaN()) 0f else level01.coerceIn(0f, 1f)
-        val n = meterBars.size
-        val lit = (level * n).toInt().coerceIn(0, n)
-        val frac = (level * n - lit).coerceIn(0f, 1f)
-        for ((idx, bar) in meterBars.withIndex()) {
-            val target = when {
-                idx < lit -> 1f
-                idx == lit && idx < n -> BAR_DIM_ALPHA + frac * (1f - BAR_DIM_ALPHA)
-                else -> BAR_DIM_ALPHA
-            }
-            bar.alpha += (target - bar.alpha) * BAR_SMOOTHING
-        }
+        val targetScale = RING_MIN_SCALE + level * (RING_MAX_SCALE - RING_MIN_SCALE)
+        val targetAlpha = RING_MIN_ALPHA + level * (RING_MAX_ALPHA - RING_MIN_ALPHA)
+        // Smooth the ring so it reads cleanly (no per-frame jitter).
+        voiceRing.scaleX += (targetScale - voiceRing.scaleX) * RING_SMOOTHING
+        voiceRing.scaleY += (targetScale - voiceRing.scaleY) * RING_SMOOTHING
+        voiceRing.alpha += (targetAlpha - voiceRing.alpha) * RING_SMOOTHING
     }
 
     // ------------------------------------------- IME switching helpers
@@ -317,7 +332,10 @@ class GptVoiceIme : InputMethodService() {
     companion object {
         private const val TAG = "GptVoiceIme"
         private const val METER_UI_INTERVAL_MS = 33L
-        private const val BAR_DIM_ALPHA = 0.12f
-        private const val BAR_SMOOTHING = 0.35f
+        private const val RING_MIN_SCALE = 0.45f
+        private const val RING_MAX_SCALE = 1.0f
+        private const val RING_MIN_ALPHA = 0.15f
+        private const val RING_MAX_ALPHA = 0.9f
+        private const val RING_SMOOTHING = 0.35f
     }
 }
