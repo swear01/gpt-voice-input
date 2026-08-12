@@ -44,10 +44,10 @@ class EndpointDetectorTest {
         val driver = Driver(detector)
 
         driver.feed(50, speech = false) // quiet start
-        driver.feed(10, speech = true) // speech begins
-        driver.feed(50, speech = false) // silence… 1000ms so far
+        driver.feed(10, speech = true) // speech begins (sets ~200ms hangover)
+        driver.feed(50, speech = false) // 10 frames hangover + 40 silence → ~700ms so far
         assertEquals(0, listener.endOfSpeech)
-        driver.feed(45, speech = false) // …+900ms ≥ 1800ms
+        driver.feed(60, speech = false) // …+1200ms ≥ 1800ms
         assertEquals(1, listener.endOfSpeech)
         assertEquals(EndpointDetector.State.STOPPED, detector.state)
     }
@@ -59,13 +59,35 @@ class EndpointDetectorTest {
         val driver = Driver(detector)
 
         driver.feed(10, speech = true)
-        driver.feed(25, speech = false) // 500ms pause
+        driver.feed(25, speech = false) // 500ms pause (200ms hangover + 300ms real)
         assertEquals(0, listener.endOfSpeech)
         driver.feed(10, speech = true) // speech resumes → back IN_SPEECH
-        driver.feed(50, speech = false) // 1000ms silence
+        driver.feed(50, speech = false) // 10 hangover + 40 silence → ~700ms
         assertEquals(0, listener.endOfSpeech)
-        driver.feed(45, speech = false) // total ≥ 1800ms since pause
+        driver.feed(60, speech = false) // total ≥ 1800ms since pause
         assertEquals(1, listener.endOfSpeech)
+    }
+
+    @Test
+    fun `micro-gaps inside speech are bridged by the hangover`() {
+        val listener = Recorder()
+        val detector = EndpointDetector(endpointDelayMs = 1800, listener = listener)
+        val driver = Driver(detector)
+
+        driver.feed(10, speech = true)
+        // 180ms gap (< 200ms hangover): still fully inside the hangover window.
+        driver.feed(9, speech = false)
+        assertEquals(EndpointDetector.State.IN_SPEECH, detector.state)
+        // Hangover exhausted on the 10th silence frame (still not real silence).
+        driver.feed(1, speech = false)
+        assertEquals(EndpointDetector.State.IN_SPEECH, detector.state)
+        // 80ms of real silence < 100ms debounce: still talking.
+        driver.feed(4, speech = false)
+        assertEquals(EndpointDetector.State.IN_SPEECH, detector.state)
+        // 100ms of true silence → the endpoint clock may start.
+        driver.feed(1, speech = false)
+        assertEquals(EndpointDetector.State.ENDPOINT_CANDIDATE, detector.state)
+        assertEquals(0, listener.endOfSpeech)
     }
 
     @Test

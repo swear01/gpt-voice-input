@@ -18,6 +18,9 @@ package org.gptvoiceinput.audio
  * - Auto-stop is optional: endpointDelayMs == 0 disables it entirely.
  * - Speech/silence decisions are debounced (hysteresis) so brief blips don't
  *   gate the state machine.
+ * - A ~200ms speech hangover bridges micro-gaps inside words/phrases, so
+ *   natural pauses while talking never feed the silence timer (auto-stop can
+ *   only fire after real silence).
  * - Manual tap goes through the same submit() path in the caller, bypassing
  *   this machine.
  */
@@ -46,13 +49,28 @@ class EndpointDetector(
     private var silenceStreak = 0
     private var candidateSinceMs = 0L
 
+    /**
+     * Frames of "speech momentum" left after the last voiced frame. Speech
+     * naturally contains micro-gaps (consonants, breath, brief pauses between
+     * phrases); the hangover bridges those gaps so they never feed the
+     * silence timer, and the endpoint delay only starts after a real pause.
+     */
+    private var speechMomentumFrames = 0
+
     /** Feed one VAD decision; [elapsedMs] is monotonic time since recording start. */
     fun onFrame(speech: Boolean, elapsedMs: Long) {
         if (state == State.STOPPED) return
 
+        // Hangover: right after speech, keep treating frames as speech for a
+        // short window so tiny gaps inside words/phrases don't start the
+        // silence timer (this is what made auto-stop fire mid-speech).
+        val effectiveSpeech = speech || speechMomentumFrames > 0
+        if (!speech && speechMomentumFrames > 0) speechMomentumFrames--
+        if (speech) speechMomentumFrames = SPEECH_HANGOVER_FRAMES
+
         when (state) {
             State.WAITING_FOR_SPEECH -> {
-                if (speech) {
+                if (effectiveSpeech) {
                     speechStreak++
                     if (speechStreak >= SPEECH_DEBOUNCE_FRAMES) {
                         speechStreak = 0
@@ -68,7 +86,7 @@ class EndpointDetector(
             }
 
             State.IN_SPEECH -> {
-                if (speech) {
+                if (effectiveSpeech) {
                     silenceStreak = 0
                 } else {
                     silenceStreak++
@@ -82,7 +100,7 @@ class EndpointDetector(
             }
 
             State.ENDPOINT_CANDIDATE -> {
-                if (speech) {
+                if (effectiveSpeech) {
                     state = State.IN_SPEECH
                     silenceStreak = 0
                     return
@@ -114,8 +132,11 @@ class EndpointDetector(
         const val DEFAULT_NO_SPEECH_TIMEOUT_MS = 8_000
         const val DEFAULT_MAX_DURATION_MS = 120_000
 
-        /** ~40ms of speech to enter IN_SPEECH; ~60ms of silence to leave it. */
+        /** ~40ms of speech to enter IN_SPEECH. */
         private const val SPEECH_DEBOUNCE_FRAMES = 2
-        private const val SILENCE_DEBOUNCE_FRAMES = 3
+        /** ~100ms of *true* silence (after the hangover) before the endpoint clock starts. */
+        private const val SILENCE_DEBOUNCE_FRAMES = 5
+        /** ~200ms: micro-gaps inside speech never count toward the silence timer. */
+        private const val SPEECH_HANGOVER_FRAMES = 10
     }
 }

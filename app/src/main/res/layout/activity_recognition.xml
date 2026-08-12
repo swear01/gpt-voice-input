@@ -80,6 +80,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:maxWidth="300dp"
                 android:textColor="@color/recognition_fg"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -89,8 +93,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
+                android:ellipsize="end"
                 android:gravity="center"
                 android:maxLines="2"
+                android:maxWidth="300dp"
                 android:textColor="@color/recognition_fg_dim"
                 android:textSize="14sp" />
 

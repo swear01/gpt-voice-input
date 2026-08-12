@@ -90,7 +90,7 @@ class VadProcessor(
         private const val INITIAL_NOISE_FLOOR_DB = -50.0
         private const val LEVEL_SMOOTHING = 0.7
         private const val NOISE_FLOOR_ALPHA = 0.05
-        private const val MARGIN_DB = 10.0
+        private const val MARGIN_DB = 8.0
         private const val ABSOLUTE_FLOOR_DB = -45.0
         private const val HP_ALPHA = 0.9
 
@@ -98,6 +98,6 @@ class VadProcessor(
         private const val PRE_ROLL_FRAMES = 5
         private const val PRE_ROLL_ALPHA = 0.3
         /** Hard cap so an instantly-loud start can't silence the detector. */
-        private const val MAX_PRE_ROLL_FLOOR_DB = -30.0
+        private const val MAX_PRE_ROLL_FLOOR_DB = -40.0
     }
 }

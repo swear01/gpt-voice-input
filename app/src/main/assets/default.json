@@ -1,5 +1,5 @@
 {
   "expectedLanguages": ["zh-tw", "en"],
-  "transcriptionContext": "Transcribe natural dictation faithfully.\n\nThe speaker may switch between Traditional Chinese (Taiwan) and English.\nPreserve the original language of each phrase.\nUse Traditional Chinese for Chinese speech.\n\nPreserve punctuation, capitalization, acronyms, product names, code identifiers, and technical terminology.\n\nDo not translate, summarize, paraphrase, or add content.",
+  "transcriptionContext": "This is a voice-dictation recording of one person. The recording may contain background noise and other people's voices; the main speaker's speech is the dictation. The speaker may switch between Traditional Chinese (Taiwan) and English.\n\n這是一段單一使用者的語音輸入錄音。錄音中可能含有背景雜音與其他人的聲音，主要說話者的話語才是輸入內容。說話者可能在繁體中文（台灣）與英文之間切換。",
   "keywords": []
 }

@@ -162,6 +162,14 @@ Editing these fields and pressing Save creates a runtime profile override that
 persists in app-private storage and survives ordinary updates (same package,
 same signing certificate). Only an uninstall or data-clear removes it.
 
+The **default context** is a short description of the recording setting, tuned
+for hands-free voice dictation: one person dictating to a phone, possibly with
+background noise or other people's voices nearby, switching between
+Traditional Chinese and English — matching the default languages. Per OpenAI's
+gpt-transcribe guidance, the prompt describes the recording only (it is
+free-form context, not instructions). You can replace it with your own in
+Settings → Transcription.
+
 ### Settings → Profile & backup
 
 | Action | Content | API key |

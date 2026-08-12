@@ -7,8 +7,8 @@
     <string name="cd_mic">麥克風</string>
     <string name="cd_settings">設定</string>
     <string name="status_listening">聆聽中…</string>
-    <string name="status_transcribing">轉錄中…</string>
-    <string name="status_transcribe_failed">無法轉錄</string>
+    <string name="status_transcribing">轉譯中…</string>
+    <string name="status_transcribe_failed">無法轉譯</string>
     <string name="error_unauthorized">OpenAI 拒絕了這個 API key。\n請在設定中檢查或更換。</string>
     <string name="status_recording_failed">錄音失敗</string>
     <string name="status_no_key">請先設定你的 OpenAI API key</string>
@@ -53,7 +53,7 @@
 
     <!-- Settings UI -->
     <string name="section_openai">OpenAI</string>
-    <string name="section_transcription">轉錄</string>
+    <string name="section_transcription">轉譯</string>
     <string name="section_recording">錄音</string>
     <string name="api_key_label">API key</string>
     <string name="api_key_hint">OpenAI API key</string>
@@ -64,7 +64,7 @@
     <string name="languages_invalid">無效的語言代碼：%1$s</string>
     <string name="languages_empty">請至少輸入一種語言</string>
     <string name="context_label">內容提示</string>
-    <string name="context_hint">每次轉錄時一併送出的提示（選填）</string>
+    <string name="context_hint">每次轉譯時一併送出的提示（選填）</string>
     <string name="keywords_label">關鍵字／特殊詞彙</string>
     <string name="keywords_hint">每行一個詞</string>
     <string name="auto_stop_label">靜音後自動停止</string>
@@ -74,10 +74,10 @@
     <string name="import_settings">匯入設定</string>
     <string name="export_settings">匯出設定</string>
     <string name="export_full_backup">匯出完整備份</string>
-    <string name="reset_transcription_profile">重設轉錄設定檔</string>
-    <string name="reset_profile_confirm_title">重設轉錄設定檔？</string>
-    <string name="reset_profile_confirm_message">移除你的自訂轉錄設定檔並恢復為通用預設值？你的 API key 與自動停止設定會保留。</string>
-    <string name="profile_reset">已重設轉錄設定檔</string>
+    <string name="reset_transcription_profile">重設轉譯設定檔</string>
+    <string name="reset_profile_confirm_title">重設轉譯設定檔？</string>
+    <string name="reset_profile_confirm_message">移除你的自訂轉譯設定檔並恢復為通用預設值？你的 API key 與自動停止設定會保留。</string>
+    <string name="profile_reset">已重設轉譯設定檔</string>
     <string name="cd_chevron">展開</string>
     <string name="clear_api_key">清除 API key</string>
     <string name="clear_api_key_confirm_title">清除 API key？</string>

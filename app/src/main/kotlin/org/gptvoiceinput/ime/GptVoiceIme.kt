@@ -46,6 +46,7 @@ class GptVoiceIme : InputMethodService() {
     private lateinit var hintText: TextView
     private lateinit var micIcon: View
     private lateinit var voiceRing: View
+    private lateinit var processingBar: View
 
     private var controller: ImeVoiceController? = null
     private var waitingForPermission = false
@@ -65,9 +66,19 @@ class GptVoiceIme : InputMethodService() {
         hintText = view.findViewById(R.id.hint_text)
         micIcon = view.findViewById(R.id.mic_icon)
         voiceRing = view.findViewById(R.id.voice_ring)
-        // Scale from the center (Google-voice style ring).
-        voiceRing.pivotX = voiceRing.width / 2f
-        voiceRing.pivotY = voiceRing.height / 2f
+        processingBar = view.findViewById(R.id.processing_bar)
+        // Scale from the center (Google-voice style ring). The view has no
+        // size at inflate time, so fix the pivot on the first real layout —
+        // otherwise the ring expands from its top-left corner, never
+        // concentric with the mic.
+        voiceRing.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
+            val w = r - l
+            val h = b - t
+            if (w > 0 && h > 0) {
+                v.pivotX = w / 2f
+                v.pivotY = h / 2f
+            }
+        }
 
         // Keep content clear of the system bars / language bar (whisperIME-style).
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
@@ -244,29 +255,38 @@ class GptVoiceIme : InputMethodService() {
         panel ?: return
         when (state) {
             ImeVoiceController.State.ERROR -> {
+                micIcon.visibility = View.VISIBLE
                 voiceRing.visibility = View.INVISIBLE
+                processingBar.visibility = View.GONE
                 statusText.setText(R.string.status_transcribe_failed)
                 hintText.setText(errorHint())
             }
             ImeVoiceController.State.IDLE -> {
                 micIcon.visibility = View.VISIBLE
                 voiceRing.visibility = View.INVISIBLE
+                processingBar.visibility = View.GONE
                 statusText.setText(R.string.status_listening)
                 hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.LISTENING -> {
                 micIcon.visibility = View.VISIBLE
                 voiceRing.visibility = View.VISIBLE
+                processingBar.visibility = View.GONE
                 statusText.setText(R.string.status_listening)
                 hintText.setText(R.string.hint_tap_to_submit)
             }
             ImeVoiceController.State.PROCESSING -> {
+                // Clear signal that the recording is done and transcription
+                // is in flight: spinner + explicit status (Google-style).
+                micIcon.visibility = View.INVISIBLE
                 voiceRing.visibility = View.INVISIBLE
+                processingBar.visibility = View.VISIBLE
                 statusText.setText(R.string.status_transcribing)
                 hintText.setText("")
             }
             ImeVoiceController.State.FINISHED -> {
                 voiceRing.visibility = View.INVISIBLE
+                processingBar.visibility = View.GONE
             }
         }
     }

@@ -4,6 +4,28 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.8
+
+- **Google-style IME panel geometry**: the speaking ring now scales from its
+  true center (the old pivot was set before layout, so the ring grew from its
+  top-left corner and never aligned with the mic). The mic + ring live in a
+  fixed-size concentric container, with the status/hint text centered below
+  and width-capped — no more overlap with the mic or clipping at the panel
+  edge on short keyboards.
+- **Transcribing signal**: the panel now shows a spinner plus a simple
+  “轉譯中… / Transcribing…” status while the audio is being transcribed (was a
+  bare status text with the ring abruptly disappearing).
+- **Auto-stop no longer fires mid-speech**: the VAD/endpoint pipeline gained a
+  ~200ms speech hangover that bridges micro-gaps inside words and phrases
+  (only real silence can start the endpoint clock), the silence debounce was
+  raised to ~100ms, and the speech margin was lowered (10→8 dB) so softer
+  speech stays classified as speech.
+- **Noise-aware default transcription prompt**: per the current gpt-transcribe
+  guidance (prompt = free-form context about the recording; don't restate the
+  transcription task), the default prompt is now a short description of the
+  recording setting — single-speaker dictation with possible background noise
+  and other people's voices — in both Traditional Chinese and English.
+
 ## v1.0.7
 
 - **IME panel visuals**: gear and mic are pure white on the dark panel;
