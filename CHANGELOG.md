@@ -4,6 +4,13 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.3
+
+- **R8 minification disabled for release builds** (suspected interaction with
+  IME registration on HyperOS — the voice keyboard did not appear in Manage
+  keyboards with R8 on). APK size returns to ~3.2 MB until the on-device
+  cause is confirmed; the fix or a re-enable with keep rules will follow.
+
 ## v1.0.2
 
 - **Mic meter scale fixed (K-system convention)**: the meter maps peak dBFS
