@@ -50,7 +50,15 @@
         <service
             android:name=".ime.GptVoiceIme"
             android:exported="true"
+            android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD">
+            <!-- REQUIRED (official docs): the system enumerates IMEs by
+                 querying services that resolve android.view.InputMethod.
+                 Without this intent-filter the IME is never registered and
+                 never appears in Manage keyboards. -->
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method" />

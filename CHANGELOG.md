@@ -4,6 +4,18 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.4
+
+- **FIX: voice IME was never registered** — the IME service was missing the
+  required `<intent-filter><action android:name="android.view.InputMethod"/></intent-filter>`
+  (mandatory per the official "Create an input method" docs; the system
+  enumerates IMEs by that intent). Without it the IME never appears in Manage
+  keyboards on any device. This also explains why it was missing on the POCO
+  F7 / HyperOS regardless of R8 or install path.
+- Regression test added: the IME service must resolve
+  `android.view.InputMethod` (the exact query InputMethodManagerService
+  uses). R8 minification re-enabled (v1.0.3 ruled it out).
+
 ## v1.0.3
 
 - **R8 minification disabled for release builds** (suspected interaction with

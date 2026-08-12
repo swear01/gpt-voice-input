@@ -1,6 +1,7 @@
 package org.gptvoiceinput.ime
 
 import android.content.ComponentName
+import android.content.Intent
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
@@ -26,6 +27,20 @@ class ImeMetadataTest {
     private fun attr(parser: org.xmlpull.v1.XmlPullParser, name: String): String? =
         parser.getAttributeValue(null, name)
             ?: parser.getAttributeValue(androidNs, name)
+
+    @Test
+    fun `IME service resolves the system input-method intent`() {
+        // THE registration requirement: the system enumerates IMEs by
+        // querying services that resolve android.view.InputMethod. This is
+        // exactly how InputMethodManagerService builds its IME list; without
+        // the intent-filter the IME never appears in Manage keyboards.
+        val intent = Intent("android.view.InputMethod")
+        val ris = context.packageManager.queryIntentServices(intent, 0)
+        assertTrue(
+            "IME service must resolve android.view.InputMethod",
+            ris.any { it.serviceInfo.name == GptVoiceIme::class.java.name },
+        )
+    }
 
     @Test
     fun `IME service is declared with the input-method binding permission`() {
