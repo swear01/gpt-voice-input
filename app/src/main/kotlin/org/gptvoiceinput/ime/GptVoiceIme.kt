@@ -134,18 +134,20 @@ class GptVoiceIme : InputMethodService() {
 
     private val imeCallbacks = object : ImeVoiceController.Callbacks {
         override fun onStateChanged(state: ImeVoiceController.State) {
-            runCatching { renderState(state) }
-                .onFailure { Log.e(TAG, "renderState failed", it) }
-            when (state) {
-                ImeVoiceController.State.FINISHED -> {
-                    // Session ended (cancel/back): leave and return to the
-                    // previous keyboard.
-                    runCatching {
-                        requestHideSelf(0)
-                        switchToPreviousIme()
-                    }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
+            mainHandler.post {
+                runCatching { renderState(state) }
+                    .onFailure { Log.e(TAG, "renderState failed", it) }
+                when (state) {
+                    ImeVoiceController.State.FINISHED -> {
+                        // Session ended (cancel/back): leave and return to the
+                        // previous keyboard.
+                        runCatching {
+                            requestHideSelf(0)
+                            switchToPreviousIme()
+                        }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
+                    }
+                    else -> Unit
                 }
-                else -> Unit
             }
         }
 
