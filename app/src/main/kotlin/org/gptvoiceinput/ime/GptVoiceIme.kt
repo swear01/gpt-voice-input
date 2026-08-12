@@ -138,16 +138,13 @@ class GptVoiceIme : InputMethodService() {
                 if (controller?.state != state) return@Runnable
                 runCatching { renderState(state) }
                     .onFailure { Log.e(TAG, "renderState failed", it) }
-                when (state) {
-                    ImeVoiceController.State.FINISHED -> {
-                        // Session ended (cancel/back): leave and return to the
-                        // previous keyboard.
-                        runCatching {
-                            requestHideSelf(0)
-                            switchToPreviousIme()
-                        }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
-                    }
-                    else -> Unit
+                if (state == ImeVoiceController.State.FINISHED) {
+                    // Session ended (cancel/back): leave and return to the
+                    // previous keyboard.
+                    runCatching {
+                        requestHideSelf(0)
+                        switchToPreviousIme()
+                    }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
                 }
             }
             if (Looper.myLooper() == Looper.getMainLooper()) action.run()
