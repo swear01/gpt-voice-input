@@ -134,7 +134,8 @@ class GptVoiceIme : InputMethodService() {
 
     private val imeCallbacks = object : ImeVoiceController.Callbacks {
         override fun onStateChanged(state: ImeVoiceController.State) {
-            mainHandler.post {
+            val action = Runnable {
+                if (controller?.state != state) return@Runnable
                 runCatching { renderState(state) }
                     .onFailure { Log.e(TAG, "renderState failed", it) }
                 when (state) {
@@ -149,6 +150,8 @@ class GptVoiceIme : InputMethodService() {
                     else -> Unit
                 }
             }
+            if (Looper.myLooper() == Looper.getMainLooper()) action.run()
+            else mainHandler.post(action)
         }
 
         override fun onMeterLevel(level01: Float) {
