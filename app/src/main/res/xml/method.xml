@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Voice input method metadata (v1.0.0).
+
+    - supportsSwitchingToNextInputMethod: the IME can switch to the next
+      input method itself (panel tap calls switchToNextInputMethod()).
+    - settingsActivity: the gear button / system settings entry opens
+      SettingsActivity.
+    - The subtype is a normal, visible subtype (no isAuxiliary, no
+      showInInputMethodPicker=false): the voice IME lives in the keyboard
+      cycle and is reached via the globe or panel tap.
+-->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="org.gptvoiceinput.ui.SettingsActivity"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:imeSubtypeMode="voice" />
+</input-method>

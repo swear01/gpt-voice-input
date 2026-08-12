@@ -43,6 +43,20 @@
             android:theme="@style/Theme.GptVoiceInput.Settings" />
 
         <!--
+            Voice input method (v1.0.0): a normal, visible IME in the keyboard
+            cycle. The input view is a voice-only panel (no keys). Reached via
+            the globe key or by tapping the panel (switchToNextInputMethod).
+        -->
+        <service
+            android:name=".ime.GptVoiceIme"
+            android:exported="true"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!--
             Package front door, NOT a launcher entry.
 
             ACTION_MAIN + CATEGORY_INFO is Android's mechanism for a package

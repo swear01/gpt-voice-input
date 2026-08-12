@@ -17,6 +17,7 @@
     <string name="hint_no_permission">請在系統設定中允許麥克風存取</string>
     <string name="hint_tap_to_submit">點擊送出</string>
     <string name="hint_error_generic">發生錯誤，請再試一次。</string>
+    <string name="done">完成</string>
     <string name="retry">重試</string>
     <string name="cancel">取消</string>
     <string name="open_settings">開啟設定</string>

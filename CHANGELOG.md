@@ -4,6 +4,21 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.0
+
+- **Voice input method (IME)**: the app now also ships a normal, visible
+  voice IME (`GptVoiceIme`) in the keyboard cycle. The input view is a
+  voice-only panel — no keys. Reached via the globe key or by tapping the
+  panel (switchToNextInputMethod); after commit the IME auto-returns to the
+  previous keyboard (`switchToPreviousInputMethod`). Because the IME window
+  layer is above chat-head overlays, dictation works in Messenger bubbles.
+- Panel chrome: Done button / auto-stop submit; X-like escape via panel tap
+  or back key (both switch to the next IME); gear opens Settings.
+- The existing ACTION_RECOGNIZE_SPEECH Activity (SwiftKey mic) is unchanged.
+- Tests: ImeVoiceController state machine with fake recorder/transcriber,
+  IME manifest/metadata invariants (visible non-auxiliary subtype, switching
+  support).
+
 ## v0.1.7
 
 - **Fix quiet recordings**: the capture source now prefers

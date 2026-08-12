@@ -14,6 +14,16 @@ import androidx.core.content.ContextCompat
 import java.io.File
 
 /**
+ * Abstraction over the capture session so the IME voice controller can be
+ * tested without a real microphone.
+ */
+interface SessionRecorder {
+    fun start(): Boolean
+    fun stopAndFinalize()
+    fun cancelAndAbort()
+}
+
+/**
  * Raw speech capture.
  *
  * Split pipeline:
@@ -22,11 +32,10 @@ import java.io.File
  *                     └→ frame copy → downsample → VadProcessor → EndpointDetector
  * ```
  *
- * - Source: `UNPROCESSED` when the device reports support, else
- *   `VOICE_RECOGNITION`. Never `VOICE_COMMUNICATION`.
- * - No NoiseSuppressor / AGC is attached to this AudioRecord: Android audio
- *   effects attached to the session alter the captured signal itself, which
- *   would corrupt the audio sent to OpenAI.
+ * - Source: `VOICE_RECOGNITION` first (platform-tuned for speech recognition,
+ *   AGC on most devices); raw `UNPROCESSED` as fallback. No
+ *   NoiseSuppressor / AGC is attached to this AudioRecord: Android audio
+ *   effects attached to the session alter the captured signal itself.
  * - The analysis path only ever sees copies of frames.
  */
 class AudioRecorder(
@@ -36,7 +45,7 @@ class AudioRecorder(
     private val listener: Listener,
     private val noSpeechTimeoutMs: Int = EndpointDetector.DEFAULT_NO_SPEECH_TIMEOUT_MS,
     private val maxDurationMs: Int = EndpointDetector.DEFAULT_MAX_DURATION_MS,
-) {
+) : SessionRecorder {
 
     interface Listener {
         /** Called per captured frame; [level01] is a smoothed 0..1 mic level. */
@@ -65,7 +74,7 @@ class AudioRecorder(
     private var usedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION
 
     /** Returns false if the microphone could not be opened. */
-    fun start(): Boolean {
+    override fun start(): Boolean {
         if (running) return true
         // Defense in depth: the UI gates on the permission, but never rely on
         // a caller for a SecurityException-free AudioRecord construction.
@@ -118,7 +127,7 @@ class AudioRecorder(
     }
 
     /** Stops capture, joins the reader thread, and finalizes a valid WAV. */
-    fun stopAndFinalize() {
+    override fun stopAndFinalize() {
         stopLoop()
         thread?.join(JOIN_TIMEOUT_MS)
         wavWriter?.finish()
@@ -126,7 +135,7 @@ class AudioRecorder(
     }
 
     /** Stops capture without producing a usable WAV (caller deletes the file). */
-    fun cancelAndAbort() {
+    override fun cancelAndAbort() {
         stopLoop()
         thread?.join(JOIN_TIMEOUT_MS)
         wavWriter?.abort()

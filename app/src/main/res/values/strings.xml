@@ -17,6 +17,7 @@
     <string name="hint_no_permission">Allow microphone access in system settings</string>
     <string name="hint_tap_to_submit">Tap to submit</string>
     <string name="hint_error_generic">Something went wrong. Please try again.</string>
+    <string name="done">Done</string>
     <string name="retry">Retry</string>
     <string name="cancel">Cancel</string>
     <string name="open_settings">Open Settings</string>

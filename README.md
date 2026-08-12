@@ -92,6 +92,26 @@ contains your key and profile (see below):
 If Android shows a speech-recognizer chooser (some devices/SwiftKey builds do),
 select **GPT Voice Input** and choose *Always* if the OS offers that option.
 
+## Voice input method (keyboard cycle)
+
+Since v1.0.0 the app also registers a **voice input method**: a normal,
+visible IME in the keyboard cycle whose input view is the voice panel only
+(no keys). It is reached via the globe key or by tapping the panel
+(`switchToNextInputMethod`), and after committing a transcript it returns to
+the previous keyboard automatically.
+
+```text
+globe key / panel tap
+  → GPT Voice Input voice panel (above chat heads)
+  → speak (meter + auto-stop + VAD as usual)
+  → commitText → auto-return to the previous keyboard
+```
+
+Because the IME window layer is above `TYPE_APPLICATION_OVERLAY`, dictation
+works in Messenger chat heads and similar floating windows. The
+`ACTION_RECOGNIZE_SPEECH` Activity (SwiftKey mic) remains available and
+unchanged.
+
 ## How it works
 
 ```
