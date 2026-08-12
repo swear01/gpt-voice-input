@@ -117,7 +117,7 @@ class GptVoiceIme : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        sessionGeneration++
+        if (!restarting) sessionGeneration++
         lastMeterUiMs = 0L
         waitingForPermission = false
         currentError = null
