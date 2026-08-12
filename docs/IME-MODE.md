@@ -138,6 +138,27 @@ voice IME therefore only surfaces in the cycle after deliberate use, and
 post-commit auto-return (`switchToPreviousInputMethod()`) keeps the flow
 clean — non-disruption comes from recency + auto-return, not from hiding.
 
+## Real-world voice IME implementations (researched 2026)
+
+Standalone voice IMEs exist and are proven:
+
+- **whisperIME** (woheller69/whisperIME, on F-Droid): a real standalone
+  voice IME — `WhisperInputMethodService extends InputMethodService` whose
+  input view is a compact voice panel (mic button, status, processing bar and
+  a few utility buttons: switch-keyboard, enter, delete) — **no keys**. It
+  also registers as the system RecognitionService and handles
+  ACTION_RECOGNIZE_SPEECH, i.e. it ships the same multi-face pattern we would
+  (Activity for the mic path + IME for the cycle).
+- **Sayboard** (ElishaAz/Sayboard, on F-Droid): an on-device voice keyboard
+  using Vosk — the same standalone-voice-IME pattern.
+- **Gboard / SwiftKey**: the integrated variant — voice lives as an auxiliary
+  subtype *inside* the keyboard (only usable when that keyboard is active).
+
+Conclusion: a voice IME is a normal InputMethodService whose input view is
+just the voice panel; our existing pipeline (AudioRecorder, VAD, meter,
+OpenAITranscriber, settings) is reused as-is. The daily switching rhythm
+(type → globe → voice → auto-return) is exactly what these apps provide.
+
 ## Panel chrome: close (X) instead of globe
 
 Like Google's voice dictation: the panel has a single **X (close)** button
