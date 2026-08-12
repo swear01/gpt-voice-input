@@ -1,6 +1,7 @@
-# R8 rules for the release build (minify + resource shrinking enabled).
+# R8 rules (currently inactive — minification is disabled in v1.0.3 pending
+# the on-device IME-registration investigation; see app/build.gradle.kts).
 #
-# No custom keeps are needed: OkHttp, Kotlin, coroutines and AndroidX ship
-# their own consumer rules, and the app uses no reflection. Manifest-referenced
-# components (activities, the IME service, the activity-alias) are kept
-# automatically by AGP/R8.
+# When re-enabled: no custom keeps are needed — OkHttp, Kotlin, coroutines
+# and AndroidX ship their own consumer rules, the app uses no reflection,
+# and manifest-referenced components (activities, the IME service, the
+# activity-alias) are kept automatically by AGP/R8.
