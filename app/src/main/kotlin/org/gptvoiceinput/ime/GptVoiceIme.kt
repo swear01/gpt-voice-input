@@ -313,11 +313,10 @@ class GptVoiceIme : InputMethodService() {
         if (voiceRing.visibility != View.VISIBLE) return
         val level = if (level01.isNaN()) 0f else level01.coerceIn(0f, 1f)
         val targetScale = RING_MIN_SCALE + level * (RING_MAX_SCALE - RING_MIN_SCALE)
-        val targetAlpha = RING_MIN_ALPHA + level * (RING_MAX_ALPHA - RING_MIN_ALPHA)
-        // Smooth the ring so it reads cleanly (no per-frame jitter).
-        voiceRing.scaleX += (targetScale - voiceRing.scaleX) * RING_SMOOTHING
-        voiceRing.scaleY += (targetScale - voiceRing.scaleY) * RING_SMOOTHING
-        voiceRing.alpha += (targetAlpha - voiceRing.alpha) * RING_SMOOTHING
+        val targetAlpha = level * RING_MAX_ALPHA
+        voiceRing.scaleX = targetScale
+        voiceRing.scaleY = targetScale
+        voiceRing.alpha = targetAlpha
     }
 
     // ------------------------------------------- IME switching helpers
@@ -354,8 +353,6 @@ class GptVoiceIme : InputMethodService() {
         private const val METER_UI_INTERVAL_MS = 33L
         private const val RING_MIN_SCALE = 0.45f
         private const val RING_MAX_SCALE = 1.0f
-        private const val RING_MIN_ALPHA = 0.15f
         private const val RING_MAX_ALPHA = 0.9f
-        private const val RING_SMOOTHING = 0.35f
     }
 }
