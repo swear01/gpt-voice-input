@@ -1,6 +1,7 @@
 package org.gptvoiceinput.audio
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
@@ -20,6 +21,15 @@ class MicLevelEstimatorTest {
 
     private fun feed(estimator: MicLevelEstimator, frames: Int, frame: ShortArray) {
         repeat(frames) { estimator.processFrame(frame, frame.size) }
+    }
+
+    @Test
+    fun `invalid calibration is rejected`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            MicLevelEstimator(floorDb = -12f, ceilingDb = -12f)
+        }
+        assertThrows(IllegalArgumentException::class.java) { MicLevelEstimator(attack = 1.1f) }
+        assertThrows(IllegalArgumentException::class.java) { MicLevelEstimator(release = -0.1f) }
     }
 
     @Test

@@ -28,6 +28,11 @@ class MicLevelEstimator(
     private val release: Float = DEFAULT_RELEASE,
 ) {
 
+    init {
+        require(ceilingDb > floorDb)
+        require(attack in 0f..1f && release in 0f..1f)
+    }
+
     private var level = 0f // smoothed display level, 0..1
 
     /** Feeds one PCM frame; returns the smoothed normalized level in 0..1. */
@@ -36,7 +41,7 @@ class MicLevelEstimator(
         var sumSquares = 0L
         var i = 0
         while (i < count) {
-            val sample = samples[i].toLong()
+            val sample = samples[i].toInt()
             sumSquares += sample * sample
             i++
         }
