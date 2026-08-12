@@ -50,6 +50,7 @@ class GptVoiceIme : InputMethodService() {
 
     private var controller: ImeVoiceController? = null
     private var waitingForPermission = false
+    private var currentError: ImeVoiceController.ImeError? = null
     private val scope = MainScope()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -84,10 +85,10 @@ class GptVoiceIme : InputMethodService() {
         // Tap anywhere = submit (listening) / retry (error) / settings
         // (when waiting for the mic permission).
         view.setOnClickListener {
-            if (waitingForPermission) {
-                openSettings()
-            } else {
-                runCatching { controller?.onPanelTap() }
+            when {
+                waitingForPermission -> openSettings()
+                currentError != null -> handleErrorTap()
+                else -> runCatching { controller?.onPanelTap() }
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
             }
         }
@@ -104,6 +105,7 @@ class GptVoiceIme : InputMethodService() {
         super.onStartInputView(info, restarting)
         lastMeterUiMs = 0L
         waitingForPermission = false
+        currentError = null
         if (hasMicPermission()) {
             controller?.start()
         } else {
@@ -141,6 +143,11 @@ class GptVoiceIme : InputMethodService() {
             if (now - lastMeterUiMs < METER_UI_INTERVAL_MS) return
             lastMeterUiMs = now
             mainHandler.post { runCatching { renderMeter(level01) } }
+        }
+
+        override fun onError(error: ImeVoiceController.ImeError) {
+            currentError = error
+            mainHandler.post { runCatching { renderState(ImeVoiceController.State.ERROR) } }
         }
 
         override fun onTranscript(transcript: String) {
@@ -205,9 +212,26 @@ class GptVoiceIme : InputMethodService() {
 
     // ------------------------------------------------------------------ UI
 
+    private fun handleErrorTap() {
+        val error = currentError ?: return
+        when (ImeVoiceController.actionForError(error)) {
+            ImeVoiceController.PanelAction.OPEN_SETTINGS -> openSettings()
+            ImeVoiceController.PanelAction.RETRY -> {
+                currentError = null
+                runCatching { controller?.onPanelTap() }
+                    .onFailure { Log.e(TAG, "panel tap failed", it) }
+            }
+        }
+    }
+
     private fun renderState(state: ImeVoiceController.State) {
         panel ?: return
         when (state) {
+            ImeVoiceController.State.ERROR -> {
+                meterContainer.visibility = View.GONE
+                statusText.setText(R.string.status_transcribe_failed)
+                hintText.setText(errorHint())
+            }
             ImeVoiceController.State.IDLE -> {
                 micIcon.visibility = View.VISIBLE
                 meterContainer.visibility = View.GONE
@@ -225,15 +249,24 @@ class GptVoiceIme : InputMethodService() {
                 statusText.setText(R.string.status_transcribing)
                 hintText.setText("")
             }
-            ImeVoiceController.State.ERROR -> {
-                meterContainer.visibility = View.GONE
-                statusText.setText(R.string.status_transcribe_failed)
-                hintText.setText(R.string.hint_tap_to_retry)
-            }
             ImeVoiceController.State.FINISHED -> {
                 meterContainer.visibility = View.GONE
             }
         }
+    }
+
+    /** Localized, actionable hint for the current error. */
+    private fun errorHint(): String = when (currentError) {
+        ImeVoiceController.ImeError.NO_API_KEY -> getString(R.string.hint_no_key)
+        ImeVoiceController.ImeError.RECORDING_FAILED -> getString(R.string.hint_tap_to_retry)
+        ImeVoiceController.ImeError.AUTH -> getString(R.string.error_unauthorized)
+        ImeVoiceController.ImeError.RATE_LIMITED -> getString(R.string.error_rate_limited)
+        ImeVoiceController.ImeError.SERVER -> getString(R.string.error_server)
+        ImeVoiceController.ImeError.API_ERROR -> getString(R.string.error_api_generic)
+        ImeVoiceController.ImeError.TIMEOUT -> getString(R.string.error_timeout)
+        ImeVoiceController.ImeError.NETWORK -> getString(R.string.error_network)
+        ImeVoiceController.ImeError.PROTOCOL -> getString(R.string.hint_error_generic)
+        null -> getString(R.string.hint_tap_to_retry)
     }
 
     private fun renderMeter(level01: Float) {

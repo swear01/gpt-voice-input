@@ -4,6 +4,17 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.6
+
+- **Classified IME errors**: failures are now typed (no API key, recording
+  failed, auth, rate-limited, server, API error, timeout, network, protocol)
+  and shown with the matching localized message. Settings-fixable errors
+  (no key / auth) open Settings on panel tap; transient errors retry.
+- **Test expansion**: error classification for every failure path, panel-tap
+  semantics, exact state sequences, cancel-during-in-flight-transcription
+  race, retry reuses the same WAV, and a real integration test — controller
+  + OpenAITranscriber against MockWebServer end to end (161 tests, lint 0).
+
 ## v1.0.5
 
 - **IME panel redesign (whisperIME-style)**: minimal voice-only panel — large

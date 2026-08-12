@@ -42,6 +42,7 @@
     <string name="error_rate_limited">已達速率限制，請稍後再試</string>
     <string name="error_server">OpenAI 伺服器錯誤，請稍後再試</string>
     <string name="error_api">OpenAI API 錯誤（HTTP %1$d）</string>
+    <string name="error_api_generic">OpenAI API 錯誤 — 請再試一次</string>
     <string name="error_timeout">請求逾時，請再試一次</string>
     <string name="error_network">網路錯誤 — 請檢查連線</string>
 

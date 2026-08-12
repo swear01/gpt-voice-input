@@ -40,13 +40,33 @@ class ImeVoiceController(
 
     enum class State { IDLE, LISTENING, PROCESSING, ERROR, FINISHED }
 
+    /** Classified session failures so the UI can show the right message/action. */
+    enum class ImeError {
+        NO_API_KEY,
+        RECORDING_FAILED,
+        AUTH,
+        RATE_LIMITED,
+        SERVER,
+        API_ERROR,
+        TIMEOUT,
+        NETWORK,
+        PROTOCOL,
+    }
+
+    /** What a panel tap should do while in the error state. */
+    enum class PanelAction { RETRY, OPEN_SETTINGS }
+
     interface Callbacks {
         fun onStateChanged(state: State)
         fun onMeterLevel(level01: Float)
         fun onTranscript(transcript: String)
+        fun onError(error: ImeError)
     }
 
     var state: State = State.IDLE
+        private set
+
+    var lastError: ImeError? = null
         private set
 
     private var recorder: SessionRecorder? = null
@@ -65,7 +85,7 @@ class ImeVoiceController(
         override fun onMaxDuration() = finishAndTranscribe()
 
         override fun onRecordingError(message: String) {
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.RECORDING_FAILED)
         }
     }
 
@@ -73,7 +93,7 @@ class ImeVoiceController(
     fun start() {
         if (state == State.LISTENING || state == State.PROCESSING) return
         if (secureStore.load().isNullOrBlank()) {
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.NO_API_KEY)
             return
         }
         wavFile.delete()
@@ -83,7 +103,7 @@ class ImeVoiceController(
         this.recorder = recorder
         if (!recorder.start()) {
             // onRecordingError already fired through the listener.
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.RECORDING_FAILED)
         }
     }
 
@@ -110,13 +130,14 @@ class ImeVoiceController(
         transcribeJob?.cancel()
         wavFile.delete()
         wavReady = false
+        lastError = null
         setState(State.FINISHED)
     }
 
     fun retry() {
         if (state != State.ERROR) return
         if (!wavReady || !wavFile.exists()) {
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
         setState(State.PROCESSING)
@@ -130,7 +151,7 @@ class ImeVoiceController(
             recorder?.stopAndFinalize()
         } catch (e: Exception) {
             recorder = null
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
         recorder = null
@@ -144,7 +165,7 @@ class ImeVoiceController(
         )
 
         if (!wavFile.exists() || wavFile.length() == 0L) {
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
         transcribe()
@@ -152,7 +173,7 @@ class ImeVoiceController(
 
     private fun transcribe() {
         val key = secureStore.load() ?: run {
-            setState(State.ERROR)
+            setState(State.ERROR, ImeError.NO_API_KEY)
             return
         }
         val profile = AppConfig.load(context, importedProfileStore.load(), settingsStore.customTerms())
@@ -166,9 +187,9 @@ class ImeVoiceController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TranscriptionException) {
-                setState(State.ERROR)
+                setState(State.ERROR, errorOf(e))
             } catch (e: Exception) {
-                setState(State.ERROR)
+                setState(State.ERROR, ImeError.PROTOCOL)
             }
         }
     }
@@ -178,16 +199,37 @@ class ImeVoiceController(
         recorder = null
         wavFile.delete()
         wavReady = false
+        lastError = null
         setState(State.FINISHED)
     }
 
-    private fun setState(newState: State) {
-        if (state == newState) return
+    private fun setState(newState: State, error: ImeError? = null) {
+        if (state == newState && error == null) return
         state = newState
+        if (error != null) {
+            lastError = error
+            callbacks.onError(error)
+        }
         callbacks.onStateChanged(newState)
     }
 
+    private fun errorOf(e: TranscriptionException): ImeError = when (e) {
+        is TranscriptionException.Unauthorized -> ImeError.AUTH
+        is TranscriptionException.RateLimited -> ImeError.RATE_LIMITED
+        is TranscriptionException.ServerError -> ImeError.SERVER
+        is TranscriptionException.ApiError -> ImeError.API_ERROR
+        is TranscriptionException.Timeout -> ImeError.TIMEOUT
+        is TranscriptionException.Network -> ImeError.NETWORK
+        is TranscriptionException.Protocol -> ImeError.PROTOCOL
+    }
+
     companion object {
+        /** Pure mapping for tests: settings-fixable errors open Settings, the rest retry. */
+        fun actionForError(error: ImeError): PanelAction = when (error) {
+            ImeError.NO_API_KEY, ImeError.AUTH -> PanelAction.OPEN_SETTINGS
+            else -> PanelAction.RETRY
+        }
+
         private const val TAG = "ImeVoiceController"
 
         /** Production wiring: real recorder + real OpenAI transcriber. */

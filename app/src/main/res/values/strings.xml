@@ -42,6 +42,7 @@
     <string name="error_rate_limited">Rate limited — please try again in a moment</string>
     <string name="error_server">OpenAI server error — please try again</string>
     <string name="error_api">OpenAI API error (HTTP %1$d)</string>
+    <string name="error_api_generic">OpenAI API error — please try again</string>
     <string name="error_timeout">Request timed out — please try again</string>
     <string name="error_network">Network error — check your connection</string>
 
