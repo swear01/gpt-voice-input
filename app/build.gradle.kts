@@ -78,14 +78,8 @@ android {
 
     buildTypes {
         release {
-            // v1.0.3: R8 minification/shrinking temporarily DISABLED — a
-            // suspected interaction with IME registration on HyperOS (the
-            // voice keyboard did not appear in Manage keyboards with R8 on,
-            // while the R8'd APK verified statically intact). Re-enable only
-            // after the on-device cause is confirmed. APK size returns to
-            // ~3.2 MB.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
