@@ -54,6 +54,7 @@ class GptVoiceIme : InputMethodService() {
     private var navBarPainted = false
     // Main-thread confined; finishAndReturn is only called after dispatch.
     private var returnedToPreviousIme = false
+    private var inputViewActive = false
     private val scope = MainScope()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -122,6 +123,7 @@ class GptVoiceIme : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        inputViewActive = true
         transcriptRetry?.let(mainHandler::removeCallbacks)
         transcriptRetry = null
         if (!restarting) {
@@ -214,6 +216,9 @@ class GptVoiceIme : InputMethodService() {
             .getOrDefault(false)
         if (switched) {
             returnedToPreviousIme = true
+            mainHandler.postDelayed({
+                if (returnedToPreviousIme && inputViewActive) requestHideSelf(0)
+            }, 300)
         } else {
             runCatching { requestHideSelf(0) }
                 .onSuccess { returnedToPreviousIme = true }
@@ -224,6 +229,7 @@ class GptVoiceIme : InputMethodService() {
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         // Never keep an invisible recording session alive.
+        inputViewActive = false
         returnedToPreviousIme = true
         transcriptRetry?.let(mainHandler::removeCallbacks)
         transcriptRetry = null
