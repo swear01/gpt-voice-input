@@ -7,6 +7,23 @@ import com.konovalov.vad.webrtc.config.SampleRate
 import android.util.Log
 
 /**
+ * Thin seam over the WebRTC native VAD so the wrapper's error contract
+ * (native failure -> reported as silence, never a crash) is unit-testable
+ * without the Android .so, which cannot load in the unit-test JVM.
+ */
+internal interface WebRtcNativeVad {
+    fun isSpeech(frame: ShortArray): Boolean
+    fun close()
+}
+
+internal class VadWebRtcAdapter(
+    private val vad: VadWebRTC,
+) : WebRtcNativeVad {
+    override fun isSpeech(frame: ShortArray): Boolean = vad.isSpeech(frame)
+    override fun close() = vad.close()
+}
+
+/**
  * Voice activity detection with Google's WebRTC VAD — the GMM-based detector
  * used by Chrome / Google Meet (the "gold standard" for delay-sensitive
  * speech detection; Android's own speech pipeline is the AMR-WB VAD on the
@@ -25,19 +42,26 @@ import android.util.Log
  *
  * The class is NOT thread-safe; the recorder feeds it from the record
  * thread only.
+ *
+ * Construction loads the native library and throws (typically
+ * [UnsatisfiedLinkError]) when it cannot — there is intentionally no
+ * fallback detector: AudioRecorder fails the session with a clear error
+ * instead of recording without endpointing.
  */
-class WebRtcVoiceActivityDetector : VoiceActivityDetector {
+class WebRtcVoiceActivityDetector internal constructor(
+    private val nativeFactory: () -> WebRtcNativeVad = { VadWebRtcAdapter(createVad()) },
+) : VoiceActivityDetector {
 
-    private var vad = createVad().also {
-        Log.i(TAG, "WebRTC VAD loaded (native lib ok)")
-    }
+    private var vad: WebRtcNativeVad = nativeFactory()
 
     override fun isSpeech(samples: ShortArray, count: Int): Boolean {
         val frame = if (count == samples.size) samples else samples.copyOf(count)
         return try {
             vad.isSpeech(frame)
-        } catch (e: Exception) {
-            Log.w(TAG, "WebRTC VAD failed; treating frame as silence", e)
+        } catch (t: Throwable) {
+            // Native boundary: treat any failure as silence, never crash the
+            // recording thread.
+            Log.w(TAG, "WebRTC VAD failed; treating frame as silence", t)
             false
         }
     }
@@ -45,7 +69,7 @@ class WebRtcVoiceActivityDetector : VoiceActivityDetector {
     override fun reset() {
         // VadWebRTC has no reset; recreate the native instance.
         runCatching { vad.close() }
-        vad = createVad()
+        vad = nativeFactory()
     }
 
     override fun close() {

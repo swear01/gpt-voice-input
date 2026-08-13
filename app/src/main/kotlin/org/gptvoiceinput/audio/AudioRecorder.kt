@@ -13,6 +13,7 @@ import android.os.SystemClock
 import android.annotation.SuppressLint
 import android.util.Log
 import androidx.core.content.ContextCompat
+import org.gptvoiceinput.R
 import java.io.File
 
 /**
@@ -42,9 +43,9 @@ interface SessionRecorder {
  *   reaches the transcription API. On devices where the HAL already applies
  *   noise suppression for VOICE_RECOGNITION, `create()` returns null and the
  *   platform processing stands.
- * - VAD: Google's WebRTC VAD (GMM) via [WebRtcVoiceActivityDetector], with
- *   the legacy energy detector as a fallback if the native library cannot
- *   load.
+ * - VAD: Google's WebRTC VAD (GMM) via [WebRtcVoiceActivityDetector]. If the
+ *   native library cannot initialize, the session fails with a clear error
+ *   (no silent fallback: endpointing cannot work without a VAD).
  * - The analysis path only ever sees copies of frames.
  */
 class AudioRecorder(
@@ -54,12 +55,7 @@ class AudioRecorder(
     private val listener: Listener,
     private val noSpeechTimeoutMs: Int = EndpointDetector.DEFAULT_NO_SPEECH_TIMEOUT_MS,
     private val maxDurationMs: Int = EndpointDetector.DEFAULT_MAX_DURATION_MS,
-    private val vadFactory: () -> VoiceActivityDetector = {
-        // WebRTC VAD primary; energy-based fallback if the native lib fails.
-        runCatching { WebRtcVoiceActivityDetector() }
-            .onFailure { Log.w(TAG, "WebRTC VAD unavailable; using energy VAD fallback", it) }
-            .getOrElse { VadProcessor(sampleRate = ANALYSIS_RATE) }
-    },
+    private val vadFactory: () -> VoiceActivityDetector = { WebRtcVoiceActivityDetector() },
 ) : SessionRecorder {
 
     interface Listener {
@@ -101,15 +97,28 @@ class AudioRecorder(
             return false
         }
         return try {
+            // VAD first: fail fast with a clear, localized error BEFORE
+            // touching the microphone hardware. No fallback — endpointing
+            // cannot work without a VAD. Catch Throwable: a missing native
+            // library throws UnsatisfiedLinkError, which is not an Exception.
+            vad = try {
+                vadFactory()
+            } catch (t: Throwable) {
+                Log.e(TAG, "VAD initialization failed", t)
+                listener.onRecordingError(context.getString(R.string.mic_vad_failed))
+                return false
+            }
+
             val chosen = openAudioRecord() ?: run {
-                listener.onRecordingError(context.getString(org.gptvoiceinput.R.string.mic_unavailable))
+                vad?.close()
+                vad = null
+                listener.onRecordingError(context.getString(R.string.mic_unavailable))
                 return false
             }
             record = chosen.record
             usedSource = chosen.source
 
             wavWriter = WavWriter(wavFile, chosen.record.sampleRate)
-            vad = vadFactory()
             levelEstimator = MicLevelEstimator()
 
             // Built-in noise reduction: attach to this recording session so
@@ -168,7 +177,7 @@ class AudioRecorder(
 
     private fun recordLoop() {
         val r = record ?: return
-        val frameSamples = r.sampleRate * VadProcessor.FRAME_MS / 1000
+        val frameSamples = r.sampleRate * FRAME_MS / 1000
         val frame = ShortArray(frameSamples)
         var filled = 0
 
@@ -259,7 +268,7 @@ class AudioRecorder(
                     AudioFormat.ENCODING_PCM_16BIT,
                 )
                 if (minBuf <= 0) continue
-                val frameSamples = rate * VadProcessor.FRAME_MS / 1000
+                val frameSamples = rate * FRAME_MS / 1000
                 val bufSize = minBuf.coerceAtLeast(frameSamples * 2 * 2)
                 val r = try {
                     AudioRecord(source, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufSize)
@@ -324,6 +333,8 @@ class AudioRecorder(
     companion object {
         private const val TAG = "AudioRecorder"
         private const val ANALYSIS_RATE = 16_000
+        /** Analysis frame duration; must match VoiceActivityDetector frames. */
+        private const val FRAME_MS = 20
         private const val JOIN_TIMEOUT_MS = 2_000L
 
         private val SAMPLE_RATE_CANDIDATES = intArrayOf(48_000, 44_100, 16_000, 8_000)

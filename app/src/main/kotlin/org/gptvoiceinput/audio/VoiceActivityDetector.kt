@@ -7,7 +7,7 @@ package org.gptvoiceinput.audio
  * silence. The recorder hands each analysis frame copy here before the
  * EndpointDetector; the audio uploaded to OpenAI never passes through this.
  */
-interface VoiceActivityDetector {
+interface VoiceActivityDetector : AutoCloseable {
 
     /** Classifies one frame; [count] is the number of valid samples. */
     fun isSpeech(samples: ShortArray, count: Int): Boolean
@@ -16,5 +16,5 @@ interface VoiceActivityDetector {
     fun reset()
 
     /** Releases native resources, if any. Idempotent. */
-    fun close() = Unit
+    override fun close() = Unit
 }

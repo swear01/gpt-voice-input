@@ -10,6 +10,7 @@
     <string name="status_transcribing">Transcribing…</string>
     <string name="status_transcribe_failed">Couldn\'t transcribe</string>
     <string name="status_no_words">No words detected</string>
+    <string name="mic_vad_failed">Voice detection is unavailable on this device</string>
     <string name="error_unauthorized">OpenAI rejected the API key.\nCheck or replace the key in Settings.</string>
     <string name="status_recording_failed">Recording failed</string>
     <string name="status_no_key">Set your OpenAI API key</string>
