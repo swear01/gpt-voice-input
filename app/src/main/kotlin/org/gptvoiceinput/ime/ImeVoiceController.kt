@@ -72,6 +72,8 @@ class ImeVoiceController(
     private var recorder: SessionRecorder? = null
     private var transcribeJob: Job? = null
     private var wavReady = false
+    @Volatile
+    private var sessionGeneration = 0
 
     private val recorderListener = object : AudioRecorder.Listener {
         override fun onFrameCaptured(elapsedMs: Long, level01: Float) {
@@ -98,6 +100,7 @@ class ImeVoiceController(
         }
         wavFile.delete()
         wavReady = false
+        sessionGeneration++
         setState(State.LISTENING)
         val recorder = recorderFactory(wavFile, settingsStore.autoStopMs, recorderListener)
         this.recorder = recorder
@@ -125,6 +128,7 @@ class ImeVoiceController(
     /** Cancels the session (IME closed / switched away): no API request. */
     fun cancel() {
         if (state == State.FINISHED) return
+        sessionGeneration++
         recorder?.cancelAndAbort()
         recorder = null
         transcribeJob?.cancel()
@@ -177,9 +181,11 @@ class ImeVoiceController(
             return
         }
         val profile = AppConfig.load(context, importedProfileStore.load(), settingsStore.customTerms())
+        val generation = sessionGeneration
         transcribeJob = scope.launch {
             try {
                 val transcript = transcriberFactory(key).invoke(wavFile, profile)
+                if (generation != sessionGeneration) return@launch
                 Log.i(TAG, "transcribe: ok; delivering to InputConnection")
                 wavFile.delete()
                 wavReady = false
@@ -187,14 +193,17 @@ class ImeVoiceController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TranscriptionException) {
+                if (generation != sessionGeneration) return@launch
                 setState(State.ERROR, errorOf(e))
             } catch (e: Exception) {
+                if (generation != sessionGeneration) return@launch
                 setState(State.ERROR, ImeError.PROTOCOL)
             }
         }
     }
 
     private fun cancelQuietly() {
+        sessionGeneration++
         recorder?.cancelAndAbort()
         recorder = null
         wavFile.delete()
