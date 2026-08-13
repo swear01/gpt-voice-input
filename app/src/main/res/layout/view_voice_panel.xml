@@ -38,15 +38,20 @@
         android:tint="@color/recognition_fg_dim"
         tools:ignore="UseAppTint" />
 
-    <!-- Centered cluster: mic+ring, then status/hint below (Google-style). -->
-    <FrameLayout
+    <!-- Centered cluster: mic+ring, then status/hint below (Google-style).
+         IMPORTANT: modern Android's FrameLayout ignores android:gravity
+         (children are positioned only by their own layout_gravity), so
+         centering is done with LinearLayout gravity (which IS honored)
+         plus layout_gravity on FrameLayout children. -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:gravity="center">
+        android:gravity="center"
+        android:orientation="vertical">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
             android:orientation="vertical">
@@ -54,13 +59,13 @@
             <!-- Fixed-size container keeps ring and mic perfectly concentric. -->
             <FrameLayout
                 android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:gravity="center">
+                android:layout_height="120dp">
 
                 <View
                     android:id="@+id/voice_ring"
                     android:layout_width="104dp"
                     android:layout_height="104dp"
+                    android:layout_gravity="center"
                     android:alpha="0"
                     android:background="@drawable/voice_ring" />
 
@@ -68,6 +73,7 @@
                     android:id="@+id/mic_icon"
                     android:layout_width="56dp"
                     android:layout_height="56dp"
+                    android:layout_gravity="center"
                     android:contentDescription="@string/cd_mic"
                     android:src="@drawable/ic_mic"
                     android:tint="@color/recognition_fg"
@@ -77,6 +83,7 @@
                     android:id="@+id/processing_bar"
                     android:layout_width="44dp"
                     android:layout_height="44dp"
+                    android:layout_gravity="center"
                     android:indeterminateTint="@color/recognition_fg"
                     android:visibility="gone" />
             </FrameLayout>
@@ -106,5 +113,5 @@
                 android:textColor="@color/recognition_fg_dim"
                 android:textSize="14sp" />
         </LinearLayout>
-    </FrameLayout>
+    </LinearLayout>
 </LinearLayout>

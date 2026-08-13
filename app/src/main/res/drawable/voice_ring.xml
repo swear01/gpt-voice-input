@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Google-voice-style speaking ring (soft red circle). -->
+<!--
+    Google-voice-style speaking ring: a HOLLOW red ring (stroke only) that
+    appears around the mic while speaking and expands/brightens with the
+    input level. A solid disc would cover the dark panel behind the mic;
+    the stroke keeps the panel visible through the center.
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="@color/voice_ring" />
+    <stroke
+        android:width="6dp"
+        android:color="@color/voice_ring" />
+    <solid android:color="@android:color/transparent" />
 </shape>
