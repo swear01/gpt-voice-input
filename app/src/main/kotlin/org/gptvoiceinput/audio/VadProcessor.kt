@@ -66,8 +66,17 @@ class VadProcessor(
         val threshold = max(noiseFloorDb + MARGIN_DB, ABSOLUTE_FLOOR_DB)
         val speech = levelDb > threshold
         if (!speech) {
-            // Drift the noise floor toward the observed quiet level.
-            noiseFloorDb += NOISE_FLOOR_ALPHA * (levelDb - noiseFloorDb)
+            // Drift the noise floor toward the observed quiet level — but
+            // never above the cap: without it, sustained-but-missed soft
+            // speech (or loud ambient) ratchets the floor up and the
+            // detector locks onto "silence" mid-sentence, which is exactly
+            // the mid-speech auto-stop failure. With the cap, the worst
+            // case is the ambient itself reading as speech (no auto-stop;
+            // the user taps to submit) instead of cutting dictation off.
+            noiseFloorDb = minOf(
+                noiseFloorDb + NOISE_FLOOR_ALPHA * (levelDb - noiseFloorDb),
+                NOISE_FLOOR_MAX_DB,
+            )
         }
         return speech
     }
@@ -90,14 +99,19 @@ class VadProcessor(
         private const val INITIAL_NOISE_FLOOR_DB = -50.0
         private const val LEVEL_SMOOTHING = 0.7
         private const val NOISE_FLOOR_ALPHA = 0.05
-        private const val MARGIN_DB = 8.0
-        private const val ABSOLUTE_FLOOR_DB = -45.0
+        // Sensitivity vs false positives: 8 dB missed soft speech in
+        // moderate ambient (the mid-speech cut-off the user hit); 5 dB
+        // keeps quiet-but-continuous speech classified as speech.
+        private const val MARGIN_DB = 5.0
+        private const val ABSOLUTE_FLOOR_DB = -50.0
         private const val HP_ALPHA = 0.9
 
         /** First frames are treated as ambient and never classify as speech. */
         private const val PRE_ROLL_FRAMES = 5
         private const val PRE_ROLL_ALPHA = 0.3
         /** Hard cap so an instantly-loud start can't silence the detector. */
-        private const val MAX_PRE_ROLL_FLOOR_DB = -40.0
+        private const val MAX_PRE_ROLL_FLOOR_DB = -45.0
+        /** Steady-state floor cap (see the ratchet comment in isSpeech). */
+        private const val NOISE_FLOOR_MAX_DB = -45.0
     }
 }

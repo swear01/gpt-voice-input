@@ -59,7 +59,7 @@ class EndpointDetectorTest {
         val driver = Driver(detector)
 
         driver.feed(10, speech = true)
-        driver.feed(25, speech = false) // 500ms pause (200ms hangover + 300ms real)
+        driver.feed(25, speech = false) // 500ms pause (300ms hangover + 200ms real)
         assertEquals(0, listener.endOfSpeech)
         driver.feed(10, speech = true) // speech resumes → back IN_SPEECH
         driver.feed(50, speech = false) // 10 hangover + 40 silence → ~700ms
@@ -75,10 +75,10 @@ class EndpointDetectorTest {
         val driver = Driver(detector)
 
         driver.feed(10, speech = true)
-        // 180ms gap (< 200ms hangover): still fully inside the hangover window.
-        driver.feed(9, speech = false)
+        // 280ms gap (< 300ms hangover): still fully inside the hangover window.
+        driver.feed(14, speech = false)
         assertEquals(EndpointDetector.State.IN_SPEECH, detector.state)
-        // Hangover exhausted on the 10th silence frame (still not real silence).
+        // Hangover exhausted on the 15th silence frame (still not real silence).
         driver.feed(1, speech = false)
         assertEquals(EndpointDetector.State.IN_SPEECH, detector.state)
         // 80ms of real silence < 100ms debounce: still talking.

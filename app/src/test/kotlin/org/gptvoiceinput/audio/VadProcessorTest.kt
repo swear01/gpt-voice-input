@@ -22,9 +22,10 @@ class VadProcessorTest {
     }
 
     private val quiet = ShortArray(320)
-    private val loudTone = toneFrame(8000) // ≈ -17 dBFS
-    private val quietTone = toneFrame(40) // ≈ -63 dBFS
-    private val ambient = toneFrame(1200) // ≈ -34 dBFS
+    private val loudTone = toneFrame(8000) // ≈ -15 dBFS
+    private val quietTone = toneFrame(40) // ≈ -61 dBFS
+    private val ambient = toneFrame(250) // ≈ -45 dBFS (moderate background noise)
+    private val softSpeech = toneFrame(500) // ≈ -39 dBFS (quiet-but-continuous speech)
 
     private fun feedQuiet(vad: VadProcessor, frames: Int = 6) {
         repeat(frames) { assertFalse(vad.isSpeech(quiet, quiet.size)) }
@@ -50,8 +51,8 @@ class VadProcessorTest {
     fun `loud tone is speech after pre-roll`() {
         val vad = VadProcessor(sampleRate = 16000)
         feedQuiet(vad)
-        // Level smoothing converges within ~4 frames (trace-verified).
-        assertFalse(vad.isSpeech(loudTone, loudTone.size))
+        // Level smoothing converges within ~3 frames (trace-verified with
+        // the -50 dBFS absolute floor).
         assertFalse(vad.isSpeech(loudTone, loudTone.size))
         assertFalse(vad.isSpeech(loudTone, loudTone.size))
         assertTrue(vad.isSpeech(loudTone, loudTone.size))
@@ -74,6 +75,21 @@ class VadProcessorTest {
         repeat(30) { assertFalse(vad.isSpeech(ambient, ambient.size)) }
         // Clear speech above the ambient is detected (after the smoothing lag).
         assertTrue(eventuallySpeech(vad, loudTone, 5))
+    }
+
+    @Test
+    fun `soft speech in moderate ambient is still detected`() {
+        // Regression for the mid-speech auto-stop: with the old 8 dB margin
+        // the noise floor ratcheted up over the (missed) soft speech and the
+        // detector locked onto silence mid-sentence. The floor is now capped
+        // and the margin is 5 dB, so quiet-but-continuous speech stays speech.
+        val vad = VadProcessor(sampleRate = 16000)
+        repeat(6) { assertFalse(vad.isSpeech(ambient, ambient.size)) }
+        repeat(10) { assertFalse(vad.isSpeech(ambient, ambient.size)) }
+        assertTrue(
+            "soft speech must classify as speech in moderate ambient",
+            eventuallySpeech(vad, softSpeech, 10),
+        )
     }
 
     @Test

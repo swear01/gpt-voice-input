@@ -391,12 +391,20 @@ class GptVoiceIme : InputMethodService() {
     /**
      * Google-voice-style ring: invisible when silent, expands and brightens
      * with the input level; normal speech (level ~1) reaches full size.
+     * The alpha curve starts at RING_MIN_ALPHA as soon as any speech-level
+     * energy is present, so quiet speech still shows a clearly visible ring
+     * (a level-proportional alpha alone left it nearly invisible at the
+     * low levels real capture produces).
      */
     private fun renderMeter(level01: Float) {
         if (voiceRing.visibility != View.VISIBLE) return
         val level = if (level01.isNaN()) 0f else level01.coerceIn(0f, 1f)
         val targetScale = RING_MIN_SCALE + level * (RING_MAX_SCALE - RING_MIN_SCALE)
-        val targetAlpha = level * RING_MAX_ALPHA
+        val targetAlpha = if (level <= RING_VISIBLE_MIN_LEVEL) {
+            0f
+        } else {
+            RING_MIN_ALPHA + level * (RING_MAX_ALPHA - RING_MIN_ALPHA)
+        }
         voiceRing.scaleX = targetScale
         voiceRing.scaleY = targetScale
         voiceRing.alpha = targetAlpha
@@ -434,8 +442,11 @@ class GptVoiceIme : InputMethodService() {
     companion object {
         private const val TAG = "GptVoiceIme"
         private const val METER_UI_INTERVAL_MS = 33L
-        private const val RING_MIN_SCALE = 0.45f
+        private const val RING_MIN_SCALE = 0.55f
         private const val RING_MAX_SCALE = 1.0f
-        private const val RING_MAX_ALPHA = 0.9f
+        private const val RING_MIN_ALPHA = 0.35f
+        private const val RING_MAX_ALPHA = 1.0f
+        /** Below this normalized level the ring stays fully hidden (silence). */
+        private const val RING_VISIBLE_MIN_LEVEL = 0.06f
     }
 }

@@ -40,50 +40,57 @@ class MicLevelEstimatorTest {
     }
 
     @Test
-    fun `silence is zero and very quiet input stays nearly invisible`() {
+    fun `silence is zero and sub-threshold input stays invisible`() {
         val estimator = MicLevelEstimator()
         feed(estimator, 24, silent)
         assertEquals(0f, estimator.currentLevel(), 0.0001f)
-        // amplitude 300 -> RMS ≈ -43.8 dBFS, just above the -45 dBFS floor.
-        feed(estimator, 24, sineFrame(amplitude = 300))
-        assertTrue("very quiet input should stay faint", estimator.currentLevel() < 0.1f)
+        // amplitude 40 -> RMS ≈ -61.3 dBFS, below the -55 dBFS floor.
+        feed(estimator, 24, sineFrame(amplitude = 40))
+        assertTrue("very quiet input should stay invisible", estimator.currentLevel() < 0.05f)
     }
 
     @Test
-    fun `low amplitude maps to a low visible level`() {
+    fun `quiet speech maps to a clearly visible level`() {
         val estimator = MicLevelEstimator()
-        // amplitude 1000 -> RMS ≈ -33.3 dBFS -> ≈ 0.35 normalized.
+        // amplitude 300 -> RMS ≈ -43.8 dBFS -> ≈ 0.45 on the -55/-30 band.
+        feed(estimator, 24, sineFrame(amplitude = 300))
+        assertTrue(
+            "quiet speech should be clearly visible, got ${estimator.currentLevel()}",
+            estimator.currentLevel() in 0.3f..0.6f,
+        )
+    }
+
+    @Test
+    fun `normal speech drives the meter near full`() {
+        val estimator = MicLevelEstimator()
+        // amplitude 1000 -> RMS ≈ -33.3 dBFS -> ≈ 0.87. Reference: Google's
+        // AMR-WB VAD treats -26 dBov as nominal speech, so normal speech
+        // (-26 to -33 dBFS on device) must read near-full.
         feed(estimator, 24, sineFrame(amplitude = 1000))
         assertTrue(
-            "low level expected, got ${estimator.currentLevel()}",
-            estimator.currentLevel() in 0.2f..0.7f,
+            "normal speech should be near full, got ${estimator.currentLevel()}",
+            estimator.currentLevel() in 0.75f..0.98f,
         )
     }
 
     @Test
-    fun `normal speech leaves headroom for louder speech`() {
-        val estimator = MicLevelEstimator()
-        // amplitude 3000 -> RMS ≈ -23.8 dBFS -> ≈ 0.64.
-        feed(estimator, 24, sineFrame(amplitude = 3000))
-        assertTrue(
-            "normal speech should stay mid-high, got ${estimator.currentLevel()}",
-            estimator.currentLevel() in 0.5f..0.8f,
-        )
-    }
-
-    @Test
-    fun `larger amplitude is strictly higher`() {
+    fun `larger amplitude never reads lower`() {
         val quiet = MicLevelEstimator().let {
-            feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
+            feed(it, 24, sineFrame(amplitude = 300)); it.currentLevel()
         }
         val normal = MicLevelEstimator().let {
-            feed(it, 24, sineFrame(amplitude = 3000)); it.currentLevel()
+            feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
         }
         val loud = MicLevelEstimator().let {
+            feed(it, 24, sineFrame(amplitude = 3000)); it.currentLevel()
+        }
+        val louder = MicLevelEstimator().let {
             feed(it, 24, sineFrame(amplitude = 8000)); it.currentLevel()
         }
         assertTrue("normal must visibly exceed quiet ($normal vs $quiet)", normal - quiet > 0.2f)
-        assertTrue("loud must visibly exceed normal ($loud vs $normal)", loud - normal > 0.2f)
+        assertTrue("loud must not drop below normal ($loud vs $normal)", loud >= normal)
+        assertTrue("louder must saturate at the ceiling ($louder)", louder >= loud)
+        assertTrue("loud speech should saturate near full", loud > 0.95f)
     }
 
     @Test

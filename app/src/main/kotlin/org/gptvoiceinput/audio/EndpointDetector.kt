@@ -18,7 +18,7 @@ package org.gptvoiceinput.audio
  * - Auto-stop is optional: endpointDelayMs == 0 disables it entirely.
  * - Speech/silence decisions are debounced (hysteresis) so brief blips don't
  *   gate the state machine.
- * - A ~200ms speech hangover bridges micro-gaps inside words/phrases, so
+ * - A ~300ms speech hangover bridges micro-gaps inside words/phrases, so
  *   natural pauses while talking never feed the silence timer (auto-stop can
  *   only fire after real silence).
  * - Manual tap goes through the same submit() path in the caller, bypassing
@@ -136,7 +136,7 @@ class EndpointDetector(
         private const val SPEECH_DEBOUNCE_FRAMES = 2
         /** ~100ms of *true* silence (after the hangover) before the endpoint clock starts. */
         private const val SILENCE_DEBOUNCE_FRAMES = 5
-        /** ~200ms: micro-gaps inside speech never count toward the silence timer. */
-        private const val SPEECH_HANGOVER_FRAMES = 10
+        /** ~300ms: micro-gaps inside speech never count toward the silence timer. */
+        private const val SPEECH_HANGOVER_FRAMES = 15
     }
 }

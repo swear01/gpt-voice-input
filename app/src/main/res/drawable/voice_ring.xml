@@ -8,7 +8,7 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
     <stroke
-        android:width="6dp"
+        android:width="9dp"
         android:color="@color/voice_ring" />
     <solid android:color="@android:color/transparent" />
 </shape>

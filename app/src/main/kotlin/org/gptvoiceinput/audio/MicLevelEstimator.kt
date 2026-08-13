@@ -70,8 +70,16 @@ class MicLevelEstimator(
     companion object {
         private const val MAX_PCM_AMPLITUDE = 32768.0
 
-        private const val DEFAULT_FLOOR_DB = -45f
-        private const val DEFAULT_CEILING_DB = -12f
+        // Voice-calibrated display band, shifted DOWN to match how speech
+        // actually lands on-device. Reference: the AMR-WB VAD that ships in
+        // Android (Google's own speech pipeline) uses -26 dBov as the
+        // nominal speech level (NOM_LEVEL 2050 ≈ -26 dBov Q15); real phone
+        // capture without strong AGC is often another 5-10 dB quieter.
+        // floor -55: anything below is silence (meter 0, ring invisible).
+        // ceiling -30: normal speech (-26 dBov) reads ~0.93 — near full,
+        // so the speaking ring is clearly visible while talking.
+        private const val DEFAULT_FLOOR_DB = -55f
+        private const val DEFAULT_CEILING_DB = -30f
         private const val DEFAULT_ATTACK = 0.6f
         private const val DEFAULT_RELEASE = 0.2f
     }
