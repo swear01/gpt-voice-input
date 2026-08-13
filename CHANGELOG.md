@@ -4,6 +4,24 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.11
+
+- **IME panel centering fixed**: the panel relied on `android:gravity="center"`
+  on two FrameLayouts — but modern Android's FrameLayout **ignores that
+  attribute** (children are positioned only by their own `layout_gravity`),
+  so on current Android versions the whole cluster rendered top-left: mic
+  and red speaking disc detached from each other, status/hint text
+  left-aligned, ring drawn off-center. The centering now uses LinearLayout
+  gravity (which is honored) plus `layout_gravity` on the ring/mic/spinner,
+  and the text column spans the full panel width so everything stays
+  centered even when an error hint wraps wide.
+- **Speaking ring is a real ring now**: it was a solid red disc (104dp oval)
+  painted over the panel; it's now a hollow 6dp-stroke ring around the mic,
+  matching the Google voice-style design.
+- Verified on an API 35 emulator: mic center within 1px of panel center
+  (was ~200px off before), settings dark mode, and recognition panel all
+  render as designed.
+
 ## v1.0.10
 
 - **Settings page works in system dark mode**: the app previously had no
