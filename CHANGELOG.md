@@ -4,6 +4,23 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.12
+
+- **Accidental taps are discarded**: a capture shorter than 0.5 s (e.g. a
+  stray tap on the panel) is deleted without calling the transcription API —
+  the panel silently goes back to listening instead of committing garbage.
+- **"No words detected" error**: when the transcript comes back empty or
+  without meaningful text (whitespace/punctuation-only, or fewer than two
+  letters/digits/CJK characters — e.g. „嗯“), the app no longer commits it;
+  it shows a clear **No words detected / 沒有偵測到任何文字** error, and
+  tapping retries with a fresh recording (never re-transcribes the same
+  noise).
+- **Re-tap starts a fresh session**: after a transcript is committed and the
+  IME returns to the previous keyboard, tapping the voice key again starts
+  a new listening session — the controller no longer gets stuck in the
+  stale „Transcribing…“ state (the IME can skip onFinishInputView when it
+  auto-returns, so the session is now explicitly reset after delivery).
+
 ## v1.0.11
 
 - **IME panel centering fixed**: the panel relied on `android:gravity="center"`
