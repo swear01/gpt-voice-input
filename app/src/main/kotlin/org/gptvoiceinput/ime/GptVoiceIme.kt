@@ -52,6 +52,9 @@ class GptVoiceIme : InputMethodService() {
     private var waitingForPermission = false
     private var currentError: ImeVoiceController.ImeError? = null
     private var navBarPainted = false
+    // Main-thread confined; finishAndReturn is only called after dispatch.
+    private var returnedToPreviousIme = false
+    private var inputViewActive = false
     private val scope = MainScope()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -60,6 +63,8 @@ class GptVoiceIme : InputMethodService() {
 
     @Volatile
     private var lastMeterUiMs = 0L
+    private var transcriptRetry: Runnable? = null
+    private var pendingTranscript: String? = null
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.view_voice_panel, null)
@@ -101,6 +106,7 @@ class GptVoiceIme : InputMethodService() {
         view.setOnClickListener {
             when {
                 waitingForPermission -> openSettings()
+                pendingTranscript != null -> commitPendingTranscript()
                 currentError != null -> handleErrorTap()
                 else -> runCatching { controller?.onPanelTap() }
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
@@ -117,8 +123,15 @@ class GptVoiceIme : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        if (!restarting) sessionGeneration++
+        inputViewActive = true
+        transcriptRetry?.let(mainHandler::removeCallbacks)
+        transcriptRetry = null
+        if (!restarting) {
+            pendingTranscript = null
+            sessionGeneration++
+        }
         lastMeterUiMs = 0L
+        returnedToPreviousIme = false
         waitingForPermission = false
         currentError = null
         if (hasMicPermission()) {
@@ -130,6 +143,7 @@ class GptVoiceIme : InputMethodService() {
             renderState(ImeVoiceController.State.ERROR)
             hintText.setText(R.string.hint_no_permission)
         }
+        if (restarting && pendingTranscript != null) mainHandler.post(::commitPendingTranscript)
     }
 
     private fun hasMicPermission(): Boolean =
@@ -146,10 +160,7 @@ class GptVoiceIme : InputMethodService() {
                 if (state == ImeVoiceController.State.FINISHED) {
                     // Session ended (cancel/back): leave and return to the
                     // previous keyboard.
-                    runCatching {
-                        requestHideSelf(0)
-                        switchToPreviousIme()
-                    }.onFailure { Log.e(TAG, "return to previous IME failed", it) }
+                    finishAndReturn()
                 }
             }
             if (Looper.myLooper() == Looper.getMainLooper()) action.run()
@@ -176,10 +187,22 @@ class GptVoiceIme : InputMethodService() {
             } else {
                 // Editor focus lost at the last moment — retry once shortly.
                 Log.w(TAG, "deliver: InputConnection null, retrying")
-                mainHandler.postDelayed({
-                    currentInputConnection?.commitText(transcript, 1)
+                val generation = sessionGeneration
+                transcriptRetry?.let(mainHandler::removeCallbacks)
+                val retry = Runnable {
+                    if (sessionGeneration != generation || returnedToPreviousIme) return@Runnable
+                    transcriptRetry = null
+                    val connection = currentInputConnection ?: run {
+                        Log.w(TAG, "deliver: InputConnection still null; waiting for retry tap")
+                        pendingTranscript = transcript
+                        renderState(ImeVoiceController.State.ERROR)
+                        return@Runnable
+                    }
+                    connection.commitText(transcript, 1)
                     finishAndReturn()
-                }, 300)
+                }
+                transcriptRetry = retry
+                mainHandler.postDelayed(retry, 300)
                 return
             }
             finishAndReturn()
@@ -187,15 +210,30 @@ class GptVoiceIme : InputMethodService() {
     }
 
     private fun finishAndReturn() {
-        runCatching {
-            requestHideSelf(0)
-            switchToPreviousIme()
-        }.onFailure { Log.e(TAG, "finishAndReturn failed", it) }
+        if (returnedToPreviousIme) return
+        val switched = runCatching { switchToPreviousIme() }
+            .onFailure { Log.e(TAG, "return to previous IME failed", it) }
+            .getOrDefault(false)
+        if (switched) {
+            returnedToPreviousIme = true
+            mainHandler.postDelayed({
+                if (returnedToPreviousIme && inputViewActive) requestHideSelf(0)
+            }, 300)
+        } else {
+            runCatching { requestHideSelf(0) }
+                .onSuccess { returnedToPreviousIme = true }
+                .onFailure { Log.e(TAG, "hide IME failed", it) }
+        }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         // Never keep an invisible recording session alive.
+        inputViewActive = false
+        returnedToPreviousIme = true
+        transcriptRetry?.let(mainHandler::removeCallbacks)
+        transcriptRetry = null
+        pendingTranscript = null
         controller?.cancel()
     }
 
@@ -213,7 +251,7 @@ class GptVoiceIme : InputMethodService() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK && event?.repeatCount == 0) {
             controller?.cancel()
-            runCatching { switchToPreviousIme() }
+            finishAndReturn()
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -256,6 +294,17 @@ class GptVoiceIme : InputMethodService() {
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
             }
         }
+    }
+
+    private fun commitPendingTranscript() {
+        val transcript = pendingTranscript ?: return
+        val connection = currentInputConnection ?: run {
+            Log.w(TAG, "commit: InputConnection still null; keeping transcript for another tap")
+            return
+        }
+        pendingTranscript = null
+        connection.commitText(transcript, 1)
+        finishAndReturn()
     }
 
     private fun renderState(state: ImeVoiceController.State) {
