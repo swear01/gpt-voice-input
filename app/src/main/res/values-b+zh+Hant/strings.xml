@@ -9,6 +9,7 @@
     <string name="status_listening">聆聽中…</string>
     <string name="status_transcribing">轉譯中…</string>
     <string name="status_transcribe_failed">無法轉譯</string>
+    <string name="status_no_words">沒有偵測到任何文字</string>
     <string name="error_unauthorized">OpenAI 拒絕了這個 API key。\n請在設定中檢查或更換。</string>
     <string name="status_recording_failed">錄音失敗</string>
     <string name="status_no_key">請先設定你的 OpenAI API key</string>

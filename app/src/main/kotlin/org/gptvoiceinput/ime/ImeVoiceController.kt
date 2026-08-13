@@ -44,6 +44,7 @@ class ImeVoiceController(
     enum class ImeError {
         NO_API_KEY,
         RECORDING_FAILED,
+        NO_WORDS,
         AUTH,
         RATE_LIMITED,
         SERVER,
@@ -54,7 +55,7 @@ class ImeVoiceController(
     }
 
     /** What a panel tap should do while in the error state. */
-    enum class PanelAction { RETRY, OPEN_SETTINGS }
+    enum class PanelAction { RETRY, OPEN_SETTINGS, RESTART }
 
     interface Callbacks {
         fun onStateChanged(state: State)
@@ -73,10 +74,13 @@ class ImeVoiceController(
     private var transcribeJob: Job? = null
     private var wavReady = false
     @Volatile
+    private var lastElapsedMs = 0L
+    @Volatile
     private var sessionGeneration = 0
 
     private val recorderListener = object : AudioRecorder.Listener {
         override fun onFrameCaptured(elapsedMs: Long, level01: Float) {
+            lastElapsedMs = elapsedMs
             callbacks.onMeterLevel(level01)
         }
 
@@ -100,6 +104,7 @@ class ImeVoiceController(
         }
         wavFile.delete()
         wavReady = false
+        lastElapsedMs = 0L
         sessionGeneration++
         setState(State.LISTENING)
         val recorder = recorderFactory(wavFile, settingsStore.autoStopMs, recorderListener)
@@ -161,6 +166,17 @@ class ImeVoiceController(
         recorder = null
         wavReady = true
 
+        // Accidental tap (no speech yet): discard the capture silently and
+        // go back to listening instead of transcribing silence/noise.
+        if (lastElapsedMs in 1 until MIN_RECORDING_MS) {
+            Log.i(TAG, "record: ${lastElapsedMs}ms < ${MIN_RECORDING_MS}ms; discarding (accidental tap)")
+            wavFile.delete()
+            wavReady = false
+            state = State.IDLE
+            start()
+            return
+        }
+
         // Privacy-safe level diagnostics: numbers only, never audio content.
         val stats = AudioLevelStats.fromWav(wavFile)
         Log.i(
@@ -186,10 +202,22 @@ class ImeVoiceController(
             try {
                 val transcript = transcriberFactory(key).invoke(wavFile, profile)
                 if (generation != sessionGeneration) return@launch
+                if (!hasMeaningfulText(transcript)) {
+                    Log.i(TAG, "transcribe: no meaningful words; NO_WORDS")
+                    wavFile.delete()
+                    wavReady = false
+                    setState(State.ERROR, ImeError.NO_WORDS)
+                    return@launch
+                }
                 Log.i(TAG, "transcribe: ok; delivering to InputConnection")
                 wavFile.delete()
                 wavReady = false
                 callbacks.onTranscript(transcript)
+                // The IME auto-returns to the previous keyboard after a
+                // commit and may not get onFinishInputView; never leave the
+                // controller stuck in PROCESSING or the next session would
+                // refuse to start (and look like it re-transcribes).
+                state = State.IDLE
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TranscriptionException) {
@@ -236,9 +264,22 @@ class ImeVoiceController(
         /** Pure mapping for tests: settings-fixable errors open Settings, the rest retry. */
         fun actionForError(error: ImeError): PanelAction = when (error) {
             ImeError.NO_API_KEY, ImeError.AUTH -> PanelAction.OPEN_SETTINGS
+            // No useful audio to retry: start a fresh listening session.
+            ImeError.NO_WORDS -> PanelAction.RESTART
             else -> PanelAction.RETRY
         }
 
+        /**
+         * A transcript is only worth committing if it carries real words:
+         * whitespace/punctuation-only results (silence, noise, a stray tap)
+         * must surface a clear "no words detected" error instead of being
+         * committed as garbage. At least two letters/digits/CJK characters.
+         */
+        fun hasMeaningfulText(text: String): Boolean =
+            text.count { it.isLetterOrDigit() } >= MIN_MEANINGFUL_CHARS
+
+        private const val MIN_RECORDING_MS = 500L
+        private const val MIN_MEANINGFUL_CHARS = 2
         private const val TAG = "ImeVoiceController"
 
         /** Production wiring: real recorder + real OpenAI transcriber. */

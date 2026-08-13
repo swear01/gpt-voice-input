@@ -32,6 +32,7 @@ import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.config.AppConfig
 import org.gptvoiceinput.config.ImportedProfileStore
 import org.gptvoiceinput.config.SettingsStore
+import org.gptvoiceinput.ime.ImeVoiceController
 import org.gptvoiceinput.net.OpenAITranscriber
 import org.gptvoiceinput.net.TranscriptionException
 import org.gptvoiceinput.security.SecureApiKeyStore
@@ -82,11 +83,18 @@ class RecognitionActivity : AppCompatActivity() {
     @Volatile
     private var lastMeterUiMs = 0L
 
+    /** Capture length (ms) of the current recording, for the min-duration check. */
+    @Volatile
+    private var lastElapsedMs = 0L
+
     private val tempWav: File
         get() = File(cacheDir, TEMP_RECORDING_NAME)
 
     private val recorderListener = object : AudioRecorder.Listener {
         override fun onFrameCaptured(elapsedMs: Long, level01: Float) {
+            // Track the capture length on EVERY frame (the meter update below
+            // is rate-limited and must not skew the min-duration check).
+            lastElapsedMs = elapsedMs
             // Bounded update rate (~30 fps): cheap skip before posting.
             val now = SystemClock.uptimeMillis()
             if (now - lastMeterUiMs < METER_UI_INTERVAL_MS) return
@@ -321,11 +329,12 @@ class RecognitionActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ flow
 
-    private fun startListening() {
-        if (phase == Phase.PROCESSING || phase == Phase.DONE) return
+    private fun startListening(force: Boolean = false) {
+        if (!force && (phase == Phase.PROCESSING || phase == Phase.DONE)) return
         tempWav.delete()
         wavReady = false
         lastMeterUiMs = 0L
+        lastElapsedMs = 0L
         setPhase(Phase.LISTENING)
 
         val endpointMs = settingsStore.autoStopMs // 0 = off
@@ -355,6 +364,16 @@ class RecognitionActivity : AppCompatActivity() {
         }
         recorder = null
         wavReady = true
+
+        // Accidental tap (no speech yet): discard the capture silently and
+        // go back to listening instead of transcribing silence/noise.
+        if (lastElapsedMs in 1 until MIN_RECORDING_MS) {
+            Log.i(TAG, "record: ${lastElapsedMs}ms < ${MIN_RECORDING_MS}ms; discarding (accidental tap)")
+            tempWav.delete()
+            wavReady = false
+            startListening(force = true)
+            return
+        }
 
         // Privacy-safe level diagnostics: numbers only, never audio content.
         // Confirms whether the captured signal is too quiet for transcription.
@@ -388,6 +407,13 @@ class RecognitionActivity : AppCompatActivity() {
                 )
                 val transcriber = OpenAITranscriber(key)
                 val transcript = transcriber.transcribe(tempWav, profile)
+                if (!ImeVoiceController.hasMeaningfulText(transcript)) {
+                    Log.i(TAG, "transcribe: no meaningful words; NO_WORDS")
+                    tempWav.delete()
+                    wavReady = false
+                    showNoWords()
+                    return@launch
+                }
                 deliverResult(transcript)
             } catch (e: CancellationException) {
                 throw e
@@ -402,11 +428,9 @@ class RecognitionActivity : AppCompatActivity() {
     private fun retry() {
         if (phase != Phase.ERROR) return
         if (!wavReady || !tempWav.exists()) {
-            setPhase(Phase.ERROR)
-            statusText.setText(R.string.status_transcribe_failed)
-            hintText.setText(R.string.rec_error_gone)
-            errorButtons.visibility = View.VISIBLE
-            retryButton.visibility = View.GONE
+            // Nothing usable to re-transcribe (e.g. no-words result): record
+            // again instead of showing a dead-end error.
+            startListening(force = true)
             return
         }
         setPhase(Phase.PROCESSING)
@@ -512,6 +536,16 @@ class RecognitionActivity : AppCompatActivity() {
         hintText.text = message
         errorButtons.visibility = View.VISIBLE
         retryButton.visibility = View.GONE // no usable recording to retry
+    }
+
+    /** The recording transcribed to nothing usable: offer a fresh recording. */
+    private fun showNoWords() {
+        setPhase(Phase.ERROR)
+        statusText.setText(R.string.status_no_words)
+        hintText.setText(R.string.hint_tap_to_retry)
+        errorButtons.visibility = View.VISIBLE
+        retryButton.visibility = View.VISIBLE // retry = record again
+        openSettingsErrorButton.visibility = View.GONE
     }
 
     private fun showError(error: TranscriptionException) {
@@ -644,5 +678,8 @@ class RecognitionActivity : AppCompatActivity() {
         /** Unlit bar alpha and the per-frame animation smoothing. */
         private const val BAR_DIM_ALPHA = 0.12f
         private const val BAR_SMOOTHING = 0.35f
+
+        /** Captures shorter than this are accidental taps: discarded silently. */
+        private const val MIN_RECORDING_MS = 500L
     }
 }

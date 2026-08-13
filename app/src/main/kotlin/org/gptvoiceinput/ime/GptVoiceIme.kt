@@ -307,6 +307,12 @@ class GptVoiceIme : InputMethodService() {
                 runCatching { controller?.onPanelTap() }
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
             }
+            ImeVoiceController.PanelAction.RESTART -> {
+                // No usable audio to retry: start a fresh listening session.
+                currentError = null
+                runCatching { controller?.start() }
+                    .onFailure { Log.e(TAG, "restart failed", it) }
+            }
         }
     }
 
@@ -328,7 +334,13 @@ class GptVoiceIme : InputMethodService() {
                 micIcon.visibility = View.VISIBLE
                 voiceRing.visibility = View.INVISIBLE
                 processingBar.visibility = View.GONE
-                statusText.setText(R.string.status_transcribe_failed)
+                statusText.setText(
+                    if (currentError == ImeVoiceController.ImeError.NO_WORDS) {
+                        R.string.status_no_words
+                    } else {
+                        R.string.status_transcribe_failed
+                    },
+                )
                 hintText.setText(errorHint())
             }
             ImeVoiceController.State.IDLE -> {
@@ -365,6 +377,7 @@ class GptVoiceIme : InputMethodService() {
     private fun errorHint(): String = when (currentError) {
         ImeVoiceController.ImeError.NO_API_KEY -> getString(R.string.hint_no_key)
         ImeVoiceController.ImeError.RECORDING_FAILED -> getString(R.string.hint_tap_to_retry)
+        ImeVoiceController.ImeError.NO_WORDS -> getString(R.string.hint_tap_to_retry)
         ImeVoiceController.ImeError.AUTH -> getString(R.string.error_unauthorized)
         ImeVoiceController.ImeError.RATE_LIMITED -> getString(R.string.error_rate_limited)
         ImeVoiceController.ImeError.SERVER -> getString(R.string.error_server)

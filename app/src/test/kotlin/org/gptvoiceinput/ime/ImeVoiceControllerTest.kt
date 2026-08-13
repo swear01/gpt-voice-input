@@ -421,4 +421,98 @@ class ImeVoiceControllerTest {
         h.controller.retry()
         assertEquals(h.wavFile.absolutePath, h.usedFile!!.absolutePath)
     }
+
+    // ------------------------------------------------------- short taps
+
+    @Test
+    fun `recording under 500ms is discarded and a fresh session starts`() {
+        val h = harness()
+        h.controller.start()
+        // 100ms of frames, then an immediate submit = accidental tap.
+        h.recorder!!.listener!!.onFrameCaptured(100, 0.3f)
+        h.controller.submit()
+        assertNull(h.delivered)
+        assertTrue(h.errors.isEmpty())
+        assertFalse(h.wavFile.exists())
+        // Back to listening automatically (no dead-end error UI).
+        assertEquals(ImeVoiceController.State.LISTENING, h.controller.state)
+        assertTrue(h.recorder!!.started)
+    }
+
+    @Test
+    fun `recording of at least 500ms is transcribed normally`() {
+        val h = harness()
+        h.controller.start()
+        h.recorder!!.listener!!.onFrameCaptured(500, 0.3f)
+        h.controller.submit()
+        assertEquals("UNIQUE_TEST_TEXT", h.delivered)
+    }
+
+    // ------------------------------------------------------- no words
+
+    @Test
+    fun `empty transcript maps to NO_WORDS and deletes the wav`() {
+        val h = harness()
+        h.nextTranscription = { "   " }
+        h.controller.start()
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals(ImeVoiceController.ImeError.NO_WORDS, h.errors.lastOrNull())
+        assertEquals(ImeVoiceController.State.ERROR, h.controller.state)
+        assertNull(h.delivered)
+        assertFalse(h.wavFile.exists())
+    }
+
+    @Test
+    fun `punctuation-only transcript maps to NO_WORDS`() {
+        val h = harness()
+        h.nextTranscription = { "。，！？" }
+        h.controller.start()
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals(ImeVoiceController.ImeError.NO_WORDS, h.errors.lastOrNull())
+        assertNull(h.delivered)
+    }
+
+    @Test
+    fun `single-character transcript maps to NO_WORDS`() {
+        val h = harness()
+        h.nextTranscription = { "嗯" }
+        h.controller.start()
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals(ImeVoiceController.ImeError.NO_WORDS, h.errors.lastOrNull())
+        assertNull(h.delivered)
+    }
+
+    @Test
+    fun `controller resets to idle after delivery so the next session starts fresh`() {
+        val h = harness()
+        h.controller.start()
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals("UNIQUE_TEST_TEXT", h.delivered)
+        // Second session: must start listening again, not re-transcribe.
+        h.controller.start()
+        assertEquals(ImeVoiceController.State.LISTENING, h.controller.state)
+        assertTrue(h.recorder!!.started)
+        h.recorder!!.fireEndOfSpeech()
+        assertEquals("UNIQUE_TEST_TEXT", h.delivered)
+    }
+
+    @Test
+    fun `action for NO_WORDS routes to RESTART`() {
+        assertEquals(
+            ImeVoiceController.PanelAction.RESTART,
+            ImeVoiceController.actionForError(ImeVoiceController.ImeError.NO_WORDS),
+        )
+    }
+
+    @Test
+    fun `hasMeaningfulText accepts real words and rejects noise`() {
+        assertTrue(ImeVoiceController.hasMeaningfulText("Hello world"))
+        assertTrue(ImeVoiceController.hasMeaningfulText("你好世界"))
+        assertTrue(ImeVoiceController.hasMeaningfulText("OK"))
+        assertFalse(ImeVoiceController.hasMeaningfulText(""))
+        assertFalse(ImeVoiceController.hasMeaningfulText("   "))
+        assertFalse(ImeVoiceController.hasMeaningfulText("。"))
+        assertFalse(ImeVoiceController.hasMeaningfulText("嗯"))
+        assertFalse(ImeVoiceController.hasMeaningfulText("...!?"))
+    }
 }
