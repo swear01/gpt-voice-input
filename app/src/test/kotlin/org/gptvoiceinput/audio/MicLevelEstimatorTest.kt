@@ -1,6 +1,7 @@
 package org.gptvoiceinput.audio
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
@@ -23,6 +24,15 @@ class MicLevelEstimatorTest {
     }
 
     @Test
+    fun `invalid calibration is rejected`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            MicLevelEstimator(floorDb = -12f, ceilingDb = -12f)
+        }
+        assertThrows(IllegalArgumentException::class.java) { MicLevelEstimator(attack = 1.1f) }
+        assertThrows(IllegalArgumentException::class.java) { MicLevelEstimator(release = -0.1f) }
+    }
+
+    @Test
     fun `all-zero input stays at floor minimum`() {
         val estimator = MicLevelEstimator()
         feed(estimator, 24, silent)
@@ -30,19 +40,19 @@ class MicLevelEstimatorTest {
     }
 
     @Test
-    fun `silence and whisper read zero`() {
+    fun `silence is zero and very quiet input stays nearly invisible`() {
         val estimator = MicLevelEstimator()
         feed(estimator, 24, silent)
         assertEquals(0f, estimator.currentLevel(), 0.0001f)
-        // amplitude 300 -> peak ≈ -40.8 dBFS — below the -40 dBFS floor.
+        // amplitude 300 -> RMS ≈ -43.8 dBFS, just above the -45 dBFS floor.
         feed(estimator, 24, sineFrame(amplitude = 300))
-        assertEquals("whisper must read zero", 0f, estimator.currentLevel(), 0.0001f)
+        assertTrue("very quiet input should stay faint", estimator.currentLevel() < 0.1f)
     }
 
     @Test
     fun `low amplitude maps to a low visible level`() {
         val estimator = MicLevelEstimator()
-        // amplitude 1000 -> peak ≈ -30.3 dBFS -> ≈ 0.48 normalized.
+        // amplitude 1000 -> RMS ≈ -33.3 dBFS -> ≈ 0.35 normalized.
         feed(estimator, 24, sineFrame(amplitude = 1000))
         assertTrue(
             "low level expected, got ${estimator.currentLevel()}",
@@ -51,13 +61,13 @@ class MicLevelEstimatorTest {
     }
 
     @Test
-    fun `normal speech level reads full`() {
+    fun `normal speech leaves headroom for louder speech`() {
         val estimator = MicLevelEstimator()
-        // amplitude 3000 -> peak ≈ -20.8 dBFS (typical AGC'd speech) -> ≈ 0.96.
+        // amplitude 3000 -> RMS ≈ -23.8 dBFS -> ≈ 0.64.
         feed(estimator, 24, sineFrame(amplitude = 3000))
         assertTrue(
-            "normal speech should read full, got ${estimator.currentLevel()}",
-            estimator.currentLevel() > 0.85f,
+            "normal speech should stay mid-high, got ${estimator.currentLevel()}",
+            estimator.currentLevel() in 0.5f..0.8f,
         )
     }
 
@@ -66,10 +76,14 @@ class MicLevelEstimatorTest {
         val quiet = MicLevelEstimator().let {
             feed(it, 24, sineFrame(amplitude = 1000)); it.currentLevel()
         }
+        val normal = MicLevelEstimator().let {
+            feed(it, 24, sineFrame(amplitude = 3000)); it.currentLevel()
+        }
         val loud = MicLevelEstimator().let {
             feed(it, 24, sineFrame(amplitude = 8000)); it.currentLevel()
         }
-        assertTrue("loud must exceed quiet ($loud vs $quiet)", loud > quiet)
+        assertTrue("normal must visibly exceed quiet ($normal vs $quiet)", normal - quiet > 0.2f)
+        assertTrue("loud must visibly exceed normal ($loud vs $normal)", loud - normal > 0.2f)
     }
 
     @Test
@@ -91,20 +105,16 @@ class MicLevelEstimatorTest {
     }
 
     @Test
-    fun `peak is held then decays in silence - classic meter fall`() {
+    fun `speech attacks quickly then releases smoothly in silence`() {
         val estimator = MicLevelEstimator()
-        // Enough loud frames for the display to converge to the held peak
-        // (~10 emissions), so the subsequent fall is monotonic.
-        feed(estimator, 60, sineFrame(amplitude = 8000))
+        feed(estimator, 3, sineFrame(amplitude = 8000))
         val afterSpeech = estimator.currentLevel()
-        assertTrue("speech should raise the meter, got $afterSpeech", afterSpeech > 0.9f)
+        assertTrue("speech should raise the meter within 60 ms, got $afterSpeech", afterSpeech > 0.8f)
 
-        // Silence: the held peak decays each emission; level must fall
-        // monotonically and settle near the floor.
         var previous = afterSpeech
         var monotonic = true
-        repeat(14) {
-            feed(estimator, 6, silent)
+        repeat(30) {
+            feed(estimator, 1, silent)
             val now = estimator.currentLevel()
             if (now > previous + 0.0001f) monotonic = false
             previous = now
