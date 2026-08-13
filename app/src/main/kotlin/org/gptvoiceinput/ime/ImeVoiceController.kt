@@ -185,7 +185,7 @@ class ImeVoiceController(
         transcribeJob = scope.launch {
             try {
                 val transcript = transcriberFactory(key).invoke(wavFile, profile)
-                if (generation != sessionGeneration) return@launch
+                if (generation != sessionGeneration || state != State.PROCESSING) return@launch
                 Log.i(TAG, "transcribe: ok; delivering to InputConnection")
                 wavFile.delete()
                 wavReady = false
@@ -193,10 +193,10 @@ class ImeVoiceController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TranscriptionException) {
-                if (generation != sessionGeneration) return@launch
+                if (generation != sessionGeneration || state != State.PROCESSING) return@launch
                 setState(State.ERROR, errorOf(e))
             } catch (e: Exception) {
-                if (generation != sessionGeneration) return@launch
+                if (generation != sessionGeneration || state != State.PROCESSING) return@launch
                 setState(State.ERROR, ImeError.PROTOCOL)
             }
         }

@@ -63,6 +63,7 @@ class GptVoiceIme : InputMethodService() {
     @Volatile
     private var lastMeterUiMs = 0L
     private var transcriptRetry: Runnable? = null
+    private var pendingTranscript: String? = null
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.view_voice_panel, null)
@@ -104,6 +105,7 @@ class GptVoiceIme : InputMethodService() {
         view.setOnClickListener {
             when {
                 waitingForPermission -> openSettings()
+                pendingTranscript != null -> commitPendingTranscript()
                 currentError != null -> handleErrorTap()
                 else -> runCatching { controller?.onPanelTap() }
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
@@ -122,6 +124,7 @@ class GptVoiceIme : InputMethodService() {
         super.onStartInputView(info, restarting)
         transcriptRetry?.let(mainHandler::removeCallbacks)
         transcriptRetry = null
+        pendingTranscript = null
         if (!restarting) sessionGeneration++
         lastMeterUiMs = 0L
         returnedToPreviousIme = false
@@ -185,7 +188,9 @@ class GptVoiceIme : InputMethodService() {
                     if (sessionGeneration != generation || returnedToPreviousIme) return@Runnable
                     transcriptRetry = null
                     val connection = currentInputConnection ?: run {
-                        Log.w(TAG, "deliver: InputConnection still null; keeping IME open")
+                        Log.w(TAG, "deliver: InputConnection still null; waiting for retry tap")
+                        pendingTranscript = transcript
+                        renderState(ImeVoiceController.State.ERROR)
                         return@Runnable
                     }
                     connection.commitText(transcript, 1)
@@ -219,6 +224,7 @@ class GptVoiceIme : InputMethodService() {
         returnedToPreviousIme = true
         transcriptRetry?.let(mainHandler::removeCallbacks)
         transcriptRetry = null
+        pendingTranscript = null
         controller?.cancel()
     }
 
@@ -279,6 +285,14 @@ class GptVoiceIme : InputMethodService() {
                     .onFailure { Log.e(TAG, "panel tap failed", it) }
             }
         }
+    }
+
+    private fun commitPendingTranscript() {
+        val transcript = pendingTranscript ?: return
+        val connection = currentInputConnection ?: return
+        pendingTranscript = null
+        connection.commitText(transcript, 1)
+        finishAndReturn()
     }
 
     private fun renderState(state: ImeVoiceController.State) {
