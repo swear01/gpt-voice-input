@@ -3,6 +3,7 @@ package org.gptvoiceinput.ime
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Handler
@@ -15,6 +16,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -75,6 +77,18 @@ class GptVoiceIme : InputMethodService() {
         micIcon = view.findViewById(R.id.mic_icon)
         voiceRing = view.findViewById(R.id.voice_ring)
         processingBar = view.findViewById(R.id.processing_bar)
+        // The IME window is inflated by the system LayoutInflater (a Service,
+        // not an AppCompatActivity), which ignores AppCompat-only attributes
+        // like app:tint — the black vector fill would otherwise show on the
+        // dark panel. Apply the tints explicitly (android:tint in the layout
+        // covers this too; belt and braces).
+        (micIcon as ImageView).imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, R.color.recognition_fg),
+        )
+        view.findViewById<ImageButton>(R.id.gear_button).imageTintList =
+            ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.recognition_fg_dim),
+            )
         // Scale from the center (Google-voice style ring). The view has no
         // size at inflate time, so fix the pivot on the first real layout —
         // otherwise the ring expands from its top-left corner, never

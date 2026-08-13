@@ -15,4 +15,12 @@
     <color name="key_not_configured">#9AA7B4</color>
     <color name="meter_fill">#2DD4BF</color>
     <color name="voice_ring">#E53935</color>
+
+    <!-- Settings page (day). Night variants live in values-night. -->
+    <color name="settings_bg">#FFFFFF</color>
+    <color name="settings_fg">#0F172A</color>
+    <color name="settings_fg_dim">#5A6472</color>
+    <color name="settings_accent">#0F172A</color>
+    <color name="settings_field_fg">#0F172A</color>
+    <color name="settings_hint">#9AA7B4</color>
 </resources>

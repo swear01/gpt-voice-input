@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Night-mode settings palette. The settings page follows the system
+        dark mode with a designed palette (matching the always-dark
+        recognition/IME panel) instead of leaving the system to force-dark
+        a light theme (which rendered the page black-on-black on HyperOS).
+    -->
+    <color name="settings_bg">#0F1419</color>
+    <color name="settings_fg">#F5F7FA</color>
+    <color name="settings_fg_dim">#9AA7B4</color>
+    <color name="settings_accent">#2DD4BF</color>
+    <color name="settings_field_fg">#F5F7FA</color>
+    <color name="settings_hint">#9AA7B4</color>
+
+    <color name="key_configured">#4ADE80</color>
+    <color name="key_not_configured">#9AA7B4</color>
+</resources>

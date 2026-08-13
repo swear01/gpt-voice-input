@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+   
     android:id="@+id/settings_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/settings_bg"
     android:fillViewport="true">
 
     <LinearLayout
@@ -20,6 +21,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="@string/settings_title"
+            android:textColor="@color/settings_fg"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -45,7 +47,9 @@
             android:layout_marginTop="4dp"
             android:hint="@string/api_key_hint"
             android:inputType="textPassword"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:textColor="@color/settings_field_fg"
+            android:textColorHint="@color/settings_hint" />
 
         <TextView
             android:id="@+id/api_key_status"
@@ -53,7 +57,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:textSize="13sp" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -100,7 +103,9 @@
             android:layout_marginTop="4dp"
             android:hint="@string/languages_hint"
             android:inputType="text"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:textColor="@color/settings_field_fg"
+            android:textColorHint="@color/settings_hint" />
 
         <TextView
             style="@style/FieldLabel"
@@ -116,7 +121,9 @@
             android:gravity="top"
             android:hint="@string/context_hint"
             android:inputType="textMultiLine"
-            android:minLines="4" />
+            android:minLines="4"
+            android:textColor="@color/settings_field_fg"
+            android:textColorHint="@color/settings_hint" />
 
         <TextView
             style="@style/FieldLabel"
@@ -132,7 +139,9 @@
             android:gravity="top"
             android:hint="@string/keywords_hint"
             android:inputType="textMultiLine"
-            android:minLines="4" />
+            android:minLines="4"
+            android:textColor="@color/settings_field_fg"
+            android:textColorHint="@color/settings_hint" />
 
         <!-- Recording -->
         <TextView
@@ -160,6 +169,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
+            android:textColor="@color/settings_fg"
             android:textSize="15sp"
             android:textStyle="bold" />
 
@@ -234,6 +244,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="@string/backup_excludes_api_key"
+            android:textColor="@color/settings_fg_dim"
             android:textSize="12sp" />
 
     </LinearLayout>

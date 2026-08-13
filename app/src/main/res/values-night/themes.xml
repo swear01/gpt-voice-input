@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Night overrides for the settings theme. Styles are replaced wholesale in
+    the night configuration (they do not merge across qualifiers), so every
+    item the day version declares must be repeated here.
+-->
+<resources>
+    <style name="Theme.GptVoiceInput.Settings" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/settings_bg</item>
+        <!-- Light icons on the dark status bar. -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
