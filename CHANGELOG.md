@@ -4,6 +4,29 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.9
+
+- **IME transcription state rendering fixed**: state callbacks are now
+  dispatched on the main thread (the panel could previously miss updates when
+  a callback arrived off-thread) and stale callbacks from an older IME session
+  are discarded via a session-generation counter. The session also survives an
+  input-view restart (e.g. switching away and back mid-transcription), so the
+  panel keeps reflecting the in-flight session instead of freezing.
+- **Returning to the previous keyboard fixed**: the auto-return after commit /
+  cancel is now guaranteed to happen exactly once — no more double-switch
+  bouncing between keyboards. If committing the transcript fails at the last
+  moment (editor focus lost), the IME stays open and retries; if the editor
+  connection is still gone, the transcript is retained on the panel so a tap
+  commits it once focus returns, and it survives IME restarts. If the keyboard
+  switch itself doesn't finish, the panel hides itself rather than stranding
+  the user.
+- **Mic intensity meter fixed**: the meter was rewritten from a WebRTC-style
+  peak-hold (which saturated to full on a single loud sample — clicks, taps,
+  background noise) to per-frame RMS mapped over a voice-calibrated dBFS band
+  with fast attack and slower release. Quiet, normal, and loud speech now read
+  distinctly and the display follows sustained speech instead of flickering;
+  calibration is validated up front (ceiling > floor, attack/release in 0..1).
+
 ## v1.0.8
 
 - **Google-style IME panel geometry**: the speaking ring now scales from its
