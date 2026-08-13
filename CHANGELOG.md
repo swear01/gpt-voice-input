@@ -4,6 +4,26 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.10
+
+- **Settings page works in system dark mode**: the app previously had no
+  night-mode resources, so HyperOS force-dark inverted the hard-locked Light
+  theme and rendered the page black-on-black (dark text on the inverted
+  black background). The settings (and base) themes now use AppCompat
+  DayNight with a designed `values-night` palette that matches the always-
+  dark recognition/IME panel — dark background, light text, teal section
+  headers — and the app opts out of force dark (`forceDarkAllowed=false`)
+  so the system never mangles it again.
+- **IME mic and gear icons are white again**: the icons were black because
+  `app:tint` is AppCompat-only and is silently ignored when the system
+  LayoutInflater inflates the IME input view (a Service, not an
+  AppCompatActivity). The IME layout now uses the framework `android:tint`
+  and `GptVoiceIme` applies `imageTintList` explicitly in code (belt and
+  braces), so the white mic / dim gear show on the dark panel.
+- **Settings visuals use semantic colors**: background / text / dim text /
+  section-header accent / input hints now come from colors with dedicated
+  day and night values, and the chevron rows use framework `android:tint`.
+
 ## v1.0.9
 
 - **IME transcription state rendering fixed**: state callbacks are now
