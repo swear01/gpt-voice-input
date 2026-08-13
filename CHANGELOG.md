@@ -4,6 +4,27 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.13
+
+- **Auto-stop no longer fires mid-speech**: the VAD threshold was
+  `noiseFloor + 8 dB` and the noise floor ratcheted upward whenever a frame
+  read as silence — including soft-but-continuous speech — so the detector
+  could lock onto "silence" mid-sentence and the no-speech timeout (8 s) or
+  the endpoint timer (2.5 s) cut dictation off. The margin is now 5 dB, the
+  absolute floor -50 dBFS, the steady-state noise floor is capped at
+  -45 dBFS (worst case: ambient itself reads as speech and you submit by
+  tap — never a mid-speech cut), and the speech hangover is 300 ms so
+  breathing / consonants / short phrase breaks never feed the silence
+  timer.
+- **Speaking ring clearly visible**: the meter band was recalibrated to the
+  level Google's own speech pipeline uses — Android's AMR-WB VAD treats
+  **-26 dBov as nominal speech level** — shifting the band down to
+  [-55, -30] dBFS. Normal speech now drives the meter near full (~0.93)
+  instead of ~0.3–0.5, soft speech ~0.6, silence → 0. The ring now has a
+  minimum alpha as soon as speech-level energy appears (0.35 + level × 0.65),
+  full brightness at 1.0, starts at 0.55 scale, and the stroke is thicker
+  (6 → 9 dp).
+
 ## v1.0.12
 
 - **Accidental taps are discarded**: a capture shorter than 0.5 s (e.g. a
