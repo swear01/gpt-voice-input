@@ -249,12 +249,17 @@ unsigned (for local verification only — unsigned APKs won't install).
    `keyPassword`.
 3. `./gradlew :app:assembleRelease`
 
-**CI:** the workflow in `.github/workflows/release.yml` reads the signing
-secrets (`GVI_KEYSTORE_BASE64`, `GVI_STORE_PASSWORD`, `GVI_KEY_ALIAS`,
-`GVI_KEY_PASSWORD`), runs unit tests + Android lint, builds, verifies the
-signature with `apksigner`, asserts the versionCode strictly increased, and
-attaches `gpt-voice-input-v<tag>.apk` to a GitHub Release. Releases are always
-**generic** — personal configuration is runtime data, never injected by CI.
+**CI:** the release workflow in `.github/workflows/release.yml` runs entirely
+on GitHub-hosted runners — pushing the `v*` tag is the only step, nothing is
+built or uploaded from a local machine. The workflow reads the signing secrets
+(`GVI_KEYSTORE_BASE64`, `GVI_STORE_PASSWORD`, `GVI_KEY_ALIAS`,
+`GVI_KEY_PASSWORD`), runs unit tests + Android lint, builds the signed APK,
+verifies the signature with `apksigner`, asserts the versionCode strictly
+increased, then attaches `gpt-voice-input-v<tag>.apk` to the GitHub Release.
+That attachment **is** the release channel — Obtainium watches the Release's
+APK asset, so "uploading" to the GitHub Release is the delivery mechanism,
+not a side effect. Releases are always **generic** — personal configuration
+is runtime data, never injected by CI.
 
 Keystores and passwords are **never** committed.
 
@@ -271,10 +276,11 @@ Signed APK                        Update (installs over the old version)
 GitHub Release                    settings & data survive (same certificate)
 ```
 
-Pushing a tag (e.g. `v0.1.4`) triggers the release workflow. The APK asset
-name is predictable (`gpt-voice-input-v0.1.4.apk`) so Obtainium can track new
-versions. The signing certificate never changes, so seamless updates work
-without uninstalling.
+Pushing a tag (e.g. `v0.1.4`) triggers the release workflow on GitHub's
+servers: it builds the signed APK and automatically attaches it to the GitHub
+Release under a predictable asset name (`gpt-voice-input-v0.1.4.apk`) so
+Obtainium can track new versions. The signing certificate never changes, so
+seamless updates work without uninstalling.
 
 ### Chat heads / floating windows (e.g. Messenger bubbles)
 
