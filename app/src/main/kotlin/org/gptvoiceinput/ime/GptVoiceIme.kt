@@ -293,9 +293,7 @@ class GptVoiceIme : InputMethodService() {
     private fun commitPendingTranscript() {
         val transcript = pendingTranscript ?: return
         val connection = currentInputConnection ?: run {
-            Log.w(TAG, "commit: InputConnection still null; leaving voice IME")
-            pendingTranscript = null
-            finishAndReturn()
+            Log.w(TAG, "commit: InputConnection still null; keeping transcript for another tap")
             return
         }
         pendingTranscript = null
