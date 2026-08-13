@@ -4,6 +4,22 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.15
+
+- **Energy VAD deleted — no fallback**: the hand-written detector is gone;
+  WebRTC VAD is the only voice activity detector. If its native library
+  cannot initialize, the recording session fails fast (before the mic is
+  even opened) with a clear localized error — „Voice detection is
+  unavailable on this device / 此裝置無法使用語音偵測“ — instead of silently
+  recording without auto-stop.
+- **Error contract tested**: the wrapper contains native failures (a broken
+  native call reads as silence, never a crash), trims partial frames before
+  the native call, recreates the native instance on reset, and close is
+  idempotent. AudioRecorder tests cover the VAD-failure path, successful
+  capture with a finalized WAV, and cancel leaving the header unpatched.
+  (177 tests; the 2 real-native speech-classification tests are skipped in
+  the JVM unit run — the Android .so cannot load there — and run on device.)
+
 ## v1.0.14
 
 - **Proper VAD algorithm**: the hand-tuned energy detector is replaced with
