@@ -124,8 +124,10 @@ class GptVoiceIme : InputMethodService() {
         super.onStartInputView(info, restarting)
         transcriptRetry?.let(mainHandler::removeCallbacks)
         transcriptRetry = null
-        pendingTranscript = null
-        if (!restarting) sessionGeneration++
+        if (!restarting) {
+            pendingTranscript = null
+            sessionGeneration++
+        }
         lastMeterUiMs = 0L
         returnedToPreviousIme = false
         waitingForPermission = false
@@ -139,6 +141,7 @@ class GptVoiceIme : InputMethodService() {
             renderState(ImeVoiceController.State.ERROR)
             hintText.setText(R.string.hint_no_permission)
         }
+        if (restarting && pendingTranscript != null) mainHandler.post(::commitPendingTranscript)
     }
 
     private fun hasMicPermission(): Boolean =
@@ -289,7 +292,12 @@ class GptVoiceIme : InputMethodService() {
 
     private fun commitPendingTranscript() {
         val transcript = pendingTranscript ?: return
-        val connection = currentInputConnection ?: return
+        val connection = currentInputConnection ?: run {
+            Log.w(TAG, "commit: InputConnection still null; leaving voice IME")
+            pendingTranscript = null
+            finishAndReturn()
+            return
+        }
         pendingTranscript = null
         connection.commitText(transcript, 1)
         finishAndReturn()
