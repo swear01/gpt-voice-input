@@ -7,6 +7,8 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.os.SystemClock
 import android.annotation.SuppressLint
 import android.util.Log
@@ -29,13 +31,20 @@ interface SessionRecorder {
  * Split pipeline:
  * ```
  * AudioRecord → raw PCM → WavWriter (upload path, zero processing)
- *                     └→ frame copy → downsample → VadProcessor → EndpointDetector
+ *                     └→ frame copy → downsample → VoiceActivityDetector → EndpointDetector
  * ```
  *
  * - Source: `VOICE_RECOGNITION` first (platform-tuned for speech recognition,
- *   AGC on most devices); raw `UNPROCESSED` as fallback. No
- *   NoiseSuppressor / AGC is attached to this AudioRecord: Android audio
- *   effects attached to the session alter the captured signal itself.
+ *   AGC on most devices); raw `UNPROCESSED` as fallback.
+ * - Noise reduction: Android's built-in [NoiseSuppressor] is attached to the
+ *   recording session when the device supports it (`isAvailable()`), so the
+ *   captured signal — and therefore the uploaded WAV — is denoised before it
+ *   reaches the transcription API. On devices where the HAL already applies
+ *   noise suppression for VOICE_RECOGNITION, `create()` returns null and the
+ *   platform processing stands.
+ * - VAD: Google's WebRTC VAD (GMM) via [WebRtcVoiceActivityDetector], with
+ *   the legacy energy detector as a fallback if the native library cannot
+ *   load.
  * - The analysis path only ever sees copies of frames.
  */
 class AudioRecorder(
@@ -45,6 +54,12 @@ class AudioRecorder(
     private val listener: Listener,
     private val noSpeechTimeoutMs: Int = EndpointDetector.DEFAULT_NO_SPEECH_TIMEOUT_MS,
     private val maxDurationMs: Int = EndpointDetector.DEFAULT_MAX_DURATION_MS,
+    private val vadFactory: () -> VoiceActivityDetector = {
+        // WebRTC VAD primary; energy-based fallback if the native lib fails.
+        runCatching { WebRtcVoiceActivityDetector() }
+            .onFailure { Log.w(TAG, "WebRTC VAD unavailable; using energy VAD fallback", it) }
+            .getOrElse { VadProcessor(sampleRate = ANALYSIS_RATE) }
+    },
 ) : SessionRecorder {
 
     interface Listener {
@@ -62,9 +77,10 @@ class AudioRecorder(
     private var thread: Thread? = null
     private var record: AudioRecord? = null
     private var wavWriter: WavWriter? = null
-    private var vad: VadProcessor? = null
+    private var vad: VoiceActivityDetector? = null
     private var endpoint: EndpointDetector? = null
     private var levelEstimator: MicLevelEstimator? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
     private var startRealtimeMs = 0L
 
     val sourceDescription: String get() = sourceName(usedSource)
@@ -93,8 +109,13 @@ class AudioRecorder(
             usedSource = chosen.source
 
             wavWriter = WavWriter(wavFile, chosen.record.sampleRate)
-            vad = VadProcessor(sampleRate = ANALYSIS_RATE)
+            vad = vadFactory()
             levelEstimator = MicLevelEstimator()
+
+            // Built-in noise reduction: attach to this recording session so
+            // the captured signal (and the uploaded WAV) is denoised. Must be
+            // created before startRecording().
+            noiseSuppressor = attachNoiseSuppressor(chosen.record)
             endpoint = EndpointDetector(
                 endpointDelayMs = endpointDelayMs,
                 noSpeechTimeoutMs = noSpeechTimeoutMs,
@@ -266,11 +287,32 @@ class AudioRecorder(
         }
     }
 
+    private fun attachNoiseSuppressor(record: AudioRecord): NoiseSuppressor? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) return null
+        return try {
+            if (!NoiseSuppressor.isAvailable()) {
+                Log.i(TAG, "NoiseSuppressor: not available on this device")
+                null
+            } else {
+                NoiseSuppressor.create(record.audioSessionId)?.also {
+                    it.enabled = true
+                    Log.i(TAG, "NoiseSuppressor: attached (session ${record.audioSessionId})")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "NoiseSuppressor: attach failed", e)
+            null
+        }
+    }
+
     private fun release() {
         runCatching { record?.stop() }
         record?.release()
         record = null
+        runCatching { noiseSuppressor?.release() }
+        noiseSuppressor = null
         wavWriter = null
+        vad?.close()
         vad = null
         endpoint = null
         levelEstimator = null

@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // WebRTC VAD (com.github.gkonovalov.android-vad) is published on JitPack.
+        maven(url = "https://jitpack.io")
     }
 }
 

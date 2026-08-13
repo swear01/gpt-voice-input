@@ -22,7 +22,7 @@ class VadProcessor(
     private val sampleRate: Int,
     /** Frame duration in milliseconds (used only for the RMS window). */
     private val frameMillis: Int = FRAME_MS,
-) {
+) : VoiceActivityDetector {
 
     private var prevInput = 0.0
     private var prevFiltered = 0.0
@@ -30,7 +30,7 @@ class VadProcessor(
     private var noiseFloorDb = INITIAL_NOISE_FLOOR_DB
     private var framesSeen = 0
 
-    fun isSpeech(samples: ShortArray, count: Int): Boolean {
+    override fun isSpeech(samples: ShortArray, count: Int): Boolean {
         require(count <= samples.size)
         // High-pass filter: y[n] = alpha * (y[n-1] + x[n] - x[n-1])
         var sumSquares = 0.0
@@ -82,7 +82,7 @@ class VadProcessor(
     }
 
     /** Resets adaptation state (e.g., new recording session). */
-    fun reset() {
+    override fun reset() {
         prevInput = 0.0
         prevFiltered = 0.0
         prevLevelDb = INITIAL_LEVEL_DB

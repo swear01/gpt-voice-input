@@ -12,6 +12,7 @@ This file lists bundled third-party components and their licenses.
 | AndroidX appcompat | Apache-2.0 | https://developer.android.com/jetpack/androidx |
 | AndroidX lifecycle-runtime-ktx | Apache-2.0 | https://developer.android.com/jetpack/androidx |
 | OkHttp | Apache-2.0 | https://square.github.io/okhttp/ |
+| android-vad (WebRTC VAD GMM) | MIT (library) / BSD-3-Clause (WebRTC VAD algorithm) | https://github.com/gkonovalov/android-vad |
 
 ## Test-only dependencies
 

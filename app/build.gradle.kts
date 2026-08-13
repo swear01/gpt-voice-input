@@ -112,6 +112,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    // Google's WebRTC VAD (GMM voice activity detector) for the analysis side.
+    implementation(libs.android.vad.webrtc)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
