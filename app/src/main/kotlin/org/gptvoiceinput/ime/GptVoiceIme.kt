@@ -184,7 +184,11 @@ class GptVoiceIme : InputMethodService() {
                 val retry = Runnable {
                     if (sessionGeneration != generation || returnedToPreviousIme) return@Runnable
                     transcriptRetry = null
-                    currentInputConnection?.commitText(transcript, 1)
+                    val connection = currentInputConnection ?: run {
+                        Log.w(TAG, "deliver: InputConnection still null; keeping IME open")
+                        return@Runnable
+                    }
+                    connection.commitText(transcript, 1)
                     finishAndReturn()
                 }
                 transcriptRetry = retry
