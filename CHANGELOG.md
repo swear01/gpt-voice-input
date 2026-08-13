@@ -4,6 +4,20 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## v1.0.14
+
+- **Proper VAD algorithm**: the hand-tuned energy detector is replaced with
+  Google's **WebRTC VAD** (GMM-based, the same algorithm Chrome / Google
+  Meet use) via the android-vad library. 20 ms frames @ 16 kHz, NORMAL mode
+  (never miss soft-but-continuous speech), built-in 300 ms silence hangover
+  + 50 ms speech debounce. The energy detector remains only as a fallback
+  if the native library cannot load.
+- **Built-in noise reduction**: Android's `android.media.audiofx
+  NoiseSuppressor` is now attached to the recording session when the device
+  supports it, denoising the captured signal — and therefore the uploaded
+  WAV — before it reaches the transcription API. No-op where the platform
+  already applies noise suppression (or doesn't support the effect).
+
 ## v1.0.13
 
 - **Auto-stop no longer fires mid-speech**: the VAD threshold was
