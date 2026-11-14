@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "org.gptvoiceinput"
-        minSdk = 26
+        minSdk = 29
         targetSdk = 35
         versionCode = System.getenv("GVI_VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = System.getenv("GVI_VERSION_NAME") ?: "0.1.0"

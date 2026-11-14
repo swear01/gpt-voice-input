@@ -1,11 +1,8 @@
 package org.gptvoiceinput.audio
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -43,36 +40,19 @@ class AudioLevelStatsTest {
     }
 
     @Test
-    fun `fromWav parses a writer-produced wav`() {
-        val file = File.createTempFile("gvi-stats", ".wav")
-        try {
-            WavWriter(file, 16000).use { writer ->
-                writer.appendPcm(toneFrame(8000), 320)
-            }
-            val stats = AudioLevelStats.fromWav(file)
-            assertNotNull(stats)
-            assertEquals(-12.25f, stats!!.peakDb, 0.3f)
-        } finally {
-            file.delete()
-        }
+    fun `accumulator over frames matches one-shot stats`() {
+        val loud = toneFrame(8000)
+        val quiet = toneFrame(1000)
+        val acc = AudioLevelStats.Accumulator()
+        acc.add(quiet, 320)
+        acc.add(loud, 320)
+        val expected = AudioLevelStats.computePcm(quiet + loud, 640)
+        assertEquals(expected, acc.stats())
+        assertEquals(-12.25f, acc.stats().peakDb, 0.3f)
     }
 
     @Test
-    fun `fromWav returns null for invalid files`() {
-        val file = File.createTempFile("gvi-bad", ".wav")
-        try {
-            file.writeBytes(ByteArray(10))
-            assertNull(AudioLevelStats.fromWav(file))
-        } finally {
-            file.delete()
-        }
-    }
-
-    private inline fun WavWriter.use(block: (WavWriter) -> Unit) {
-        try {
-            block(this)
-            finish()
-        } finally {
-        }
+    fun `empty accumulator reads as silence`() {
+        assertTrue(AudioLevelStats.Accumulator().stats().peakDb < -100f)
     }
 }

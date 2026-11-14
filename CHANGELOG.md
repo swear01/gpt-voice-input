@@ -4,6 +4,18 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
+## Unreleased
+
+- **20-minute recordings**: the per-recording hard cap rises from 120 s to
+  20 minutes.
+- **Ogg/Opus upload**: recordings are encoded on the fly as 32 kbps Opus
+  (MediaCodec + MediaMuxer) instead of 48 kHz WAV — ~30x less upload data,
+  so 20 minutes is ~5 MB, well under the 25 MB API limit. The read timeout
+  rises to 300 s for long transcriptions. 44.1 kHz capture is dropped (not
+  an Opus rate); 48/16/8 kHz remain.
+- **Android 10+ required** (minSdk 26 → 29) for the Opus encoder and Ogg
+  muxer.
+
 ## v1.0.15
 
 - **Energy VAD deleted — no fallback**: the hand-written detector is gone;

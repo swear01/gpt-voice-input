@@ -138,8 +138,10 @@ class EndpointDetectorTest {
         driver.feed(10, speech = true)
         driver.feed(200, speech = false) // ENDPOINT_CANDIDATE, never auto-submits
         assertEquals(0, listener.maxDuration)
-        // 210 frames * 20ms = 4.2s so far; fast-forward by feeding long frames
-        driver.feed(1, speech = false, frameMs = 120_000)
+        // 210 frames * 20ms = 4.2s so far; fast-forward to just under the cap
+        driver.feed(1, speech = false, frameMs = EndpointDetector.DEFAULT_MAX_DURATION_MS - 4_220L)
+        assertEquals(0, listener.maxDuration)
+        driver.feed(1, speech = false)
         assertEquals(1, listener.maxDuration)
         assertEquals(EndpointDetector.State.STOPPED, detector.state)
         assertTrue("maxDuration is the submit path", listener.endOfSpeech == 0)

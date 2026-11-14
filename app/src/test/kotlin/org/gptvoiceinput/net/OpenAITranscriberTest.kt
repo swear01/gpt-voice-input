@@ -43,8 +43,8 @@ class OpenAITranscriberTest {
     private fun transcriber(client: OkHttpClient = OkHttpClient()): OpenAITranscriber =
         OpenAITranscriber("test-key", client, endpoint = server.url("/").toString())
 
-    private fun wavFile(): File {
-        val f = File.createTempFile("gvi-test", ".wav")
+    private fun audioFile(): File {
+        val f = File.createTempFile("gvi-test", ".ogg")
         f.writeBytes(ByteArray(100))
         f.deleteOnExit()
         return f
@@ -55,7 +55,7 @@ class OpenAITranscriberTest {
         server.enqueue(
             MockResponse().setBody("""{"text":"你好 world","languages":[{"code":"zh"}]}"""),
         )
-        val text = transcriber().transcribe(wavFile(), profile())
+        val text = transcriber().transcribe(audioFile(), profile())
         assertEquals("你好 world", text)
 
         val recorded = server.takeRequest()
@@ -68,6 +68,7 @@ class OpenAITranscriberTest {
         assertTrue("model value", body.contains("gpt-transcribe"))
         assertTrue("file part", body.contains("name=\"file\""))
         assertTrue("filename", body.contains("filename=\""))
+        assertTrue("ogg content type", body.contains("Content-Type: audio/ogg"))
         assertTrue("prompt part", body.contains("name=\"prompt\""))
         assertTrue("prompt value", body.contains("Neutral context."))
         assertTrue("languages[] repeated", body.contains("name=\"languages[]\""))
@@ -85,7 +86,7 @@ class OpenAITranscriberTest {
     fun `empty keyword and language lists are omitted`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"text":"plain"}"""))
         transcriber().transcribe(
-            wavFile(),
+            audioFile(),
             TranscriptionProfile(emptyList(), "", emptyList()),
         )
         val body = server.takeRequest().body.readUtf8()
@@ -99,7 +100,7 @@ class OpenAITranscriberTest {
     @Test
     fun `response without text is a protocol error`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"languages":[]}"""))
-        val result = runCatching { transcriber().transcribe(wavFile(), profile()) }
+        val result = runCatching { transcriber().transcribe(audioFile(), profile()) }
         assertTrue(result.exceptionOrNull() is TranscriptionException.Protocol)
     }
 
@@ -113,7 +114,7 @@ class OpenAITranscriberTest {
                         """{"error":{"message":"Incorrect API key provided: sk-secret123... You can find your API key at https://platform.openai.com/account/api-keys","type":"invalid_request_error"}}""",
                     ),
             )
-            runCatching { transcriber().transcribe(wavFile(), profile()) }
+            runCatching { transcriber().transcribe(audioFile(), profile()) }
         }
         val error = result.exceptionOrNull()
         assertTrue(error is TranscriptionException.Unauthorized)
@@ -133,7 +134,7 @@ class OpenAITranscriberTest {
                     .setResponseCode(403)
                     .setBody("""{"error":{"message":"You do not have access. sk-abc..."}}"""),
             )
-            runCatching { transcriber().transcribe(wavFile(), profile()) }
+            runCatching { transcriber().transcribe(audioFile(), profile()) }
         }
         val error = result.exceptionOrNull()
         assertTrue(error is TranscriptionException.Unauthorized)
@@ -148,7 +149,7 @@ class OpenAITranscriberTest {
                     .setResponseCode(429)
                     .setBody("""{"error":{"message":"Rate limit reached for sk-secret999"}}"""),
             )
-            runCatching { transcriber().transcribe(wavFile(), profile()) }
+            runCatching { transcriber().transcribe(audioFile(), profile()) }
         }
         val error = result.exceptionOrNull()
         assertTrue(error is TranscriptionException.RateLimited)
@@ -163,7 +164,7 @@ class OpenAITranscriberTest {
         server.enqueue(
             MockResponse().setBody("""{"text":"late"}""").setBodyDelay(2, TimeUnit.SECONDS),
         )
-        val result = runCatching { transcriber(shortClient).transcribe(wavFile(), profile()) }
+        val result = runCatching { transcriber(shortClient).transcribe(audioFile(), profile()) }
         assertTrue(result.exceptionOrNull() is TranscriptionException.Timeout)
         // Exactly one POST: ambiguous timeouts surface to the user for an
         // explicit retry instead of an automatic duplicate billable request.

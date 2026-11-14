@@ -24,7 +24,7 @@ import java.io.File
  *   VAD fails the session with a clear localized error and no hardware
  *   access (no fallback detector exists by design).
  * - A healthy session starts, captures (shadowed AudioRecord), and
- *   stopAndFinalize produces a WAV; cancelAndAbort leaves nothing behind.
+ *   stopAndFinalize finishes the upload sink; cancelAndAbort aborts it.
  * - NoiseSuppressor attach is best-effort and never breaks recording.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -32,10 +32,10 @@ import java.io.File
 class AudioRecorderTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private lateinit var wavFile: File
+    private lateinit var audioFile: File
 
     private class Listener : AudioRecorder.Listener {
-        var error: String? = null
+        @Volatile var error: String? = null
         var endOfSpeech = 0
         var noSpeechTimeout = 0
         var maxDuration = 0
@@ -68,12 +68,12 @@ class AudioRecorderTest {
             .grantPermissions(Manifest.permission.RECORD_AUDIO)
         // createTempFile creates an empty file; the recorder must create its
         // own, so remove it to make existence assertions meaningful.
-        wavFile = File.createTempFile("gvi-recorder-test", ".wav").apply { delete() }
+        audioFile = File.createTempFile("gvi-recorder-test", ".ogg").apply { delete() }
     }
 
     @After
     fun tearDown() {
-        wavFile.delete()
+        audioFile.delete()
     }
 
     @Test
@@ -83,7 +83,7 @@ class AudioRecorderTest {
         // Error, not an Exception) — the recorder must contain it.
         val recorder = AudioRecorder(
             context = context,
-            wavFile = wavFile,
+            audioFile = audioFile,
             endpointDelayMs = 0,
             listener = listener,
             vadFactory = { throw UnsatisfiedLinkError("no native lib") },
@@ -91,7 +91,7 @@ class AudioRecorderTest {
 
         assertFalse(recorder.start())
         assertEquals(context.getString(R.string.mic_vad_failed), listener.error)
-        assertFalse(wavFile.exists())
+        assertFalse(audioFile.exists())
     }
 
     @Test
@@ -99,7 +99,7 @@ class AudioRecorderTest {
         val listener = Listener()
         val recorder = AudioRecorder(
             context = context,
-            wavFile = wavFile,
+            audioFile = audioFile,
             endpointDelayMs = 0,
             listener = listener,
             vadFactory = { throw IllegalStateException("broken") },
@@ -110,47 +110,81 @@ class AudioRecorderTest {
     }
 
     @Test
-    fun `successful start records and stop finalizes a wav`() {
+    fun `successful start records and stop finishes the sink`() {
         val listener = Listener()
+        val sink = FakeSink()
         val recorder = AudioRecorder(
             context = context,
-            wavFile = wavFile,
+            audioFile = audioFile,
             endpointDelayMs = 0,
             listener = listener,
             vadFactory = { FakeVad() },
+            sinkFactory = { file, rate -> sink.also { it.file = file; it.rate = rate } },
         )
 
         assertTrue(recorder.start())
         recorder.stopAndFinalize()
-        assertTrue("wav must be finalized with a header", wavFile.exists() && wavFile.length() >= 44)
+        assertEquals(audioFile, sink.file)
+        assertTrue("capture rate must be an Opus rate", sink.rate in intArrayOf(48_000, 16_000, 8_000))
+        assertTrue(sink.finished)
+        assertFalse(sink.aborted)
         assertNull2(listener.error)
     }
 
     @Test
-    fun `cancel aborts without producing a wav`() {
+    fun `cancel aborts the sink without finishing it`() {
         val listener = Listener()
+        val sink = FakeSink()
         val recorder = AudioRecorder(
             context = context,
-            wavFile = wavFile,
+            audioFile = audioFile,
             endpointDelayMs = 0,
             listener = listener,
             vadFactory = { FakeVad() },
+            sinkFactory = { _, _ -> sink },
         )
 
         assertTrue(recorder.start())
         recorder.cancelAndAbort()
-        // Abort must NOT patch the WAV header (finish() does): the dataSize
-        // placeholder at offset 40 stays 0, marking the file invalid. The
-        // caller deletes the file (ImeVoiceController.cancel).
-        assertTrue("cancel must leave a wav", wavFile.exists())
-        val dataSize = wavFile.inputStream().use { input ->
-            input.skip(40)
-            (input.read() and 0xFF) or
-                ((input.read() and 0xFF) shl 8) or
-                ((input.read() and 0xFF) shl 16) or
-                ((input.read() and 0xFF) shl 24)
+        assertTrue(sink.aborted)
+        assertFalse(sink.finished)
+    }
+
+    @Test
+    fun `encoder failure stops capture with an error instead of dying silently`() {
+        val listener = Listener()
+        val sink = FakeSink(failAppend = true)
+        val recorder = AudioRecorder(
+            context = context,
+            audioFile = audioFile,
+            endpointDelayMs = 0,
+            listener = listener,
+            vadFactory = { FakeVad() },
+            sinkFactory = { _, _ -> sink },
+        )
+
+        assertTrue(recorder.start())
+        val deadline = System.currentTimeMillis() + 5_000
+        while (listener.error == null && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertEquals(context.getString(R.string.rec_error_save), listener.error)
+        recorder.cancelAndAbort()
+        assertTrue(sink.aborted)
+    }
+
+    private class FakeSink(private val failAppend: Boolean = false) : PcmSink {
+        var file: File? = null
+        var rate = 0
+        var finished = false
+        var aborted = false
+        override fun appendPcm(samples: ShortArray, count: Int) {
+            if (failAppend) throw IllegalStateException("encoder broke")
         }
-        assertEquals("aborted wav must keep the unpatched dataSize placeholder", 0, dataSize)
+        override fun finish() {
+            finished = true
+        }
+        override fun abort() {
+            aborted = true
+        }
     }
 
     private class FakeVad : VoiceActivityDetector {
