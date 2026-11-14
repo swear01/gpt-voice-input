@@ -4,7 +4,7 @@ All notable changes are captured in GitHub Releases; this file summarizes them
 per version. Versions are tagged and built by the release workflow; install and
 update through Obtainium.
 
-## Unreleased
+## v1.0.16
 
 - **20-minute recordings**: the per-recording hard cap rises from 120 s to
   20 minutes.
