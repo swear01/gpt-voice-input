@@ -167,9 +167,12 @@ class AudioRecorder(
         stopLoop()
         thread?.join(JOIN_TIMEOUT_MS)
         try {
-            sink?.finish()
-        } finally {
+            // The encoder is not thread-safe: never finalize under a live writer.
+            check(thread?.isAlive != true) { "Recorder thread did not stop" }
+            val s = sink
             sink = null
+            s?.finish()
+        } finally {
             release()
         }
     }
@@ -204,7 +207,14 @@ class AudioRecorder(
             filled += n
             if (filled == frameSamples) {
                 val elapsed = SystemClock.elapsedRealtime() - startRealtimeMs
-                sink?.appendPcm(frame, frameSamples)
+                try {
+                    sink?.appendPcm(frame, frameSamples)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Encoding failed", e)
+                    running = false
+                    postError(context.getString(org.gptvoiceinput.R.string.mic_read_failed))
+                    break
+                }
                 levels.add(frame, frameSamples)
                 // Hand the analysis pipeline a frame copy — the uploaded PCM
                 // never passes through analysis processing.

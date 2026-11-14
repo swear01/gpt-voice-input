@@ -35,7 +35,7 @@ class AudioRecorderTest {
     private lateinit var audioFile: File
 
     private class Listener : AudioRecorder.Listener {
-        var error: String? = null
+        @Volatile var error: String? = null
         var endOfSpeech = 0
         var noSpeechTimeout = 0
         var maxDuration = 0
@@ -150,12 +150,35 @@ class AudioRecorderTest {
         assertFalse(sink.finished)
     }
 
-    private class FakeSink : PcmSink {
+    @Test
+    fun `encoder failure stops capture with an error instead of dying silently`() {
+        val listener = Listener()
+        val sink = FakeSink(failAppend = true)
+        val recorder = AudioRecorder(
+            context = context,
+            audioFile = audioFile,
+            endpointDelayMs = 0,
+            listener = listener,
+            vadFactory = { FakeVad() },
+            sinkFactory = { _, _ -> sink },
+        )
+
+        assertTrue(recorder.start())
+        val deadline = System.currentTimeMillis() + 5_000
+        while (listener.error == null && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertEquals(context.getString(R.string.mic_read_failed), listener.error)
+        recorder.cancelAndAbort()
+        assertTrue(sink.aborted)
+    }
+
+    private class FakeSink(private val failAppend: Boolean = false) : PcmSink {
         var file: File? = null
         var rate = 0
         var finished = false
         var aborted = false
-        override fun appendPcm(samples: ShortArray, count: Int) = Unit
+        override fun appendPcm(samples: ShortArray, count: Int) {
+            if (failAppend) throw IllegalStateException("encoder broke")
+        }
         override fun finish() {
             finished = true
         }

@@ -26,7 +26,7 @@ interface PcmSink {
  *
  * [sampleRate] must be an Opus rate (8/12/16/24/48 kHz).
  */
-class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
+class OpusOggWriter(private val file: File, private val sampleRate: Int) : PcmSink {
 
     private val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
     private val muxer = try {
@@ -38,6 +38,7 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
     private val info = MediaCodec.BufferInfo()
     private var track = -1
     private var samplesQueued = 0L
+    private var packetsWritten = 0
 
     init {
         try {
@@ -54,9 +55,11 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
     override fun appendPcm(samples: ShortArray, count: Int) {
         require(count <= samples.size)
         var offset = 0
+        val deadline = SystemClock.elapsedRealtime() + STALL_TIMEOUT_MS
         while (offset < count) {
             val index = codec.dequeueInputBuffer(TIMEOUT_US)
             if (index < 0) {
+                check(SystemClock.elapsedRealtime() < deadline) { "Opus encoder stalled" }
                 drain(endOfStream = false)
                 continue
             }
@@ -72,7 +75,7 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
 
     override fun finish() {
         try {
-            val deadline = SystemClock.elapsedRealtime() + EOS_TIMEOUT_MS
+            val deadline = SystemClock.elapsedRealtime() + STALL_TIMEOUT_MS
             var index = codec.dequeueInputBuffer(TIMEOUT_US)
             while (index < 0 && SystemClock.elapsedRealtime() < deadline) {
                 drain(endOfStream = false)
@@ -82,9 +85,14 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
             codec.queueInputBuffer(index, 0, 0, ptsUs(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
             drain(endOfStream = true, deadline = deadline)
             codec.stop()
-            // No packets (sub-frame tap): leave the empty file; callers treat
-            // a zero-length recording as "no audio".
-            if (track >= 0) muxer.stop()
+            if (packetsWritten > 0) {
+                muxer.stop()
+            } else {
+                // No audio (sub-frame tap): a started muxer would still write
+                // header pages; delete so callers see "no audio".
+                runCatching { if (track >= 0) muxer.stop() }
+                file.delete()
+            }
         } finally {
             runCatching { codec.release() }
             runCatching { muxer.release() }
@@ -115,7 +123,10 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
                 index >= 0 -> {
                     val buf = codec.getOutputBuffer(index)!!
                     val isConfig = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
-                    if (!isConfig && info.size > 0 && track >= 0) muxer.writeSampleData(track, buf, info)
+                    if (!isConfig && info.size > 0 && track >= 0) {
+                        muxer.writeSampleData(track, buf, info)
+                        packetsWritten++
+                    }
                     codec.releaseOutputBuffer(index, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
                 }
@@ -126,6 +137,6 @@ class OpusOggWriter(file: File, private val sampleRate: Int) : PcmSink {
     companion object {
         const val BIT_RATE = 32_000
         private const val TIMEOUT_US = 10_000L
-        private const val EOS_TIMEOUT_MS = 2_000L
+        private const val STALL_TIMEOUT_MS = 2_000L
     }
 }
