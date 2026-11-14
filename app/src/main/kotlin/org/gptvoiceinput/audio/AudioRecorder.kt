@@ -212,7 +212,9 @@ class AudioRecorder(
                 } catch (e: Exception) {
                     Log.e(TAG, "Encoding failed", e)
                     running = false
-                    postError(context.getString(org.gptvoiceinput.R.string.mic_read_failed))
+                    // Turn the mic off now; owners may sit in ERROR without releasing.
+                    runCatching { r.stop() }
+                    postError(context.getString(org.gptvoiceinput.R.string.rec_error_save))
                     break
                 }
                 levels.add(frame, frameSamples)

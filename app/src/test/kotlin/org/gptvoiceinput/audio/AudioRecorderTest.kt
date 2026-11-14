@@ -166,7 +166,7 @@ class AudioRecorderTest {
         assertTrue(recorder.start())
         val deadline = System.currentTimeMillis() + 5_000
         while (listener.error == null && System.currentTimeMillis() < deadline) Thread.sleep(10)
-        assertEquals(context.getString(R.string.mic_read_failed), listener.error)
+        assertEquals(context.getString(R.string.rec_error_save), listener.error)
         recorder.cancelAndAbort()
         assertTrue(sink.aborted)
     }
