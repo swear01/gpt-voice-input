@@ -70,7 +70,7 @@ class OpenAITranscriber(
         }
 
     private fun buildRequest(audioFile: File, profile: TranscriptionProfile): Request {
-        val mediaType = "audio/wav".toMediaType()
+        val mediaType = "audio/ogg".toMediaType()
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("model", MODEL)
@@ -135,7 +135,7 @@ class OpenAITranscriber(
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(90, TimeUnit.SECONDS)
+                .readTimeout(300, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .build()
     }

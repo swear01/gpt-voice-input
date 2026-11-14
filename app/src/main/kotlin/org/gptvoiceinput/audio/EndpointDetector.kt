@@ -130,7 +130,7 @@ class EndpointDetector(
 
     companion object {
         const val DEFAULT_NO_SPEECH_TIMEOUT_MS = 8_000
-        const val DEFAULT_MAX_DURATION_MS = 120_000
+        const val DEFAULT_MAX_DURATION_MS = 20 * 60 * 1000
 
         /** ~40ms of speech to enter IN_SPEECH. */
         private const val SPEECH_DEBOUNCE_FRAMES = 2

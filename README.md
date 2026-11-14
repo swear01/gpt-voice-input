@@ -16,21 +16,22 @@ press SwiftKey mic → speak → tap or auto-stop → GPT Transcribe → text ap
 - **Transcription quality** — `gpt-transcribe` is the current OpenAI
   transcription model, with free-form context, keyword hints, and multiple
   expected input languages.
-- **Raw audio to OpenAI** — the uploaded WAV is the least-processed signal
+- **Raw audio to OpenAI** — the uploaded audio is the least-processed signal
   Android reasonably exposes while still being transcribable:
   `VOICE_RECOGNITION` is preferred because the platform tunes it for speech
   recognition (AGC on most devices); a raw `UNPROCESSED` signal has no gain
   and is typically too quiet for gpt-transcribe (near-zero meter + failed
   recognition on real devices). `UNPROCESSED` remains a fallback where
   `VOICE_RECOGNITION` misbehaves. No effects (NoiseSuppressor etc.) are
-  attached to the session.
+  attached to the session. It is encoded as 32 kbps Ogg/Opus (transparent
+  for speech recognition, ~5 MB for a 20-minute recording).
 - **Minimal interaction** — tap anywhere to submit; auto-stop is optional.
 - **Minimal footprint** — one Activity, a handful of classes; dependencies are
   AndroidX core, AppCompat, coroutines, OkHttp, and org.json.
 
 ## Requirements
 
-- Android 8.0+ (API 26)
+- Android 10+ (API 29; needed for the Opus encoder and Ogg muxer)
 - Microsoft SwiftKey with **Multimodal Voice Typing disabled**
 - An OpenAI API key (`gpt-transcribe` is billed per audio input)
 
@@ -120,7 +121,7 @@ Microphone
 AudioRecord (VOICE_RECOGNITION / UNPROCESSED)
     ↓
 raw PCM
-    ├──────────────────────────→ WAV → OpenAI gpt-transcribe
+    ├──────────────────────────→ Ogg/Opus 32 kbps → OpenAI gpt-transcribe
     │
     └→ copied frames
           ↓
@@ -132,9 +133,9 @@ raw PCM
 - Manual tap **always** wins: it calls the same submit path as auto-stop.
 - Silence timer never starts before speech is detected.
 - No-speech timeout (~8 s) cancels gracefully without an API request.
-- Hard cap of 120 s per recording.
+- Hard cap of 20 minutes per recording.
 - Timeouts and network failures surface as **Couldn't transcribe → Retry /
-  Cancel**; the already-recorded WAV is reused on retry. Ambiguous POST
+  Cancel**; the already-recorded audio is reused on retry. Ambiguous POST
   failures are never replayed automatically.
 
 ## Configuration
@@ -226,7 +227,7 @@ that ASR normalizes wrongly) — and only after observing a real misrecognition.
 # Debug
 ./gradlew :app:assembleDebug
 
-# Unit tests (VAD, endpoint state machine, WAV writer, config merge,
+# Unit tests (VAD, endpoint state machine, recorder, config merge,
 # OpenAI wire format against MockWebServer)
 ./gradlew :app:testDebugUnitTest
 ```
@@ -322,7 +323,7 @@ app/src/main/kotlin/org/gptvoiceinput/
 ├── audio/AudioRecorder.kt         split pipeline: raw upload + analysis copy
 ├── audio/VadProcessor.kt          adaptive noise floor, energy VAD (analysis only)
 ├── audio/EndpointDetector.kt      WAITING_FOR_SPEECH → IN_SPEECH → ENDPOINT_CANDIDATE
-├── audio/WavWriter.kt             44-byte RIFF writer (little-endian)
+├── audio/OpusOggWriter.kt         MediaCodec Opus → MediaMuxer Ogg (32 kbps)
 ├── net/OpenAITranscriber.kt       gpt-transcribe multipart client (OkHttp)
 ├── config/AppConfig.kt            default → runtime imported profile → legacy terms
 ├── config/SettingsStore.kt        auto-stop, legacy customTerms migration
@@ -345,7 +346,7 @@ context + keywords).
 
 - API key: runtime-entered, encrypted at rest (Android Keystore AES/GCM),
   never logged, never in the repo, never in config.
-- Recordings: `cacheDir/current_recording.wav`, deleted after success, error,
+- Recordings: `cacheDir/current_recording.ogg`, deleted after success, error,
   cancel, or destruction; stale files cleaned on next start. No history.
 - No telemetry, no analytics, no account, no backend: the device talks
   directly to `api.openai.com`.

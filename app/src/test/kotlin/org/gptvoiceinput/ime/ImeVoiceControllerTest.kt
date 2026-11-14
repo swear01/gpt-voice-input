@@ -12,7 +12,6 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.audio.SessionRecorder
-import org.gptvoiceinput.audio.WavWriter
 import org.gptvoiceinput.config.ImportedProfileStore
 import org.gptvoiceinput.config.SettingsStore
 import org.gptvoiceinput.config.TranscriptionProfile
@@ -45,7 +44,7 @@ class ImeVoiceControllerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     private class FakeRecorder(
-        private val wavFile: File,
+        private val audioFile: File,
         val writeAudio: Boolean = true,
         val failStart: Boolean = false,
     ) : SessionRecorder {
@@ -62,7 +61,7 @@ class ImeVoiceControllerTest {
 
         override fun stopAndFinalize() {
             stopped = true
-            if (writeAudio) wavFile.writeBytes(ByteArray(100)) // pretend audio
+            if (writeAudio) audioFile.writeBytes(ByteArray(100)) // pretend audio
         }
 
         override fun cancelAndAbort() {
@@ -86,7 +85,7 @@ class ImeVoiceControllerTest {
         var nextError: Exception? = null
         var usedFile: File? = null
         var fakeTranscriber: FakeTranscriber? = null
-        val wavFile = File.createTempFile("gvi-ime-test", ".wav")
+        val audioFile = File.createTempFile("gvi-ime-test", ".ogg")
         lateinit var controller: ImeVoiceController
 
         fun build(
@@ -110,7 +109,7 @@ class ImeVoiceControllerTest {
             controller = ImeVoiceController(
                 context = context,
                 scope = scope,
-                wavFile = wavFile,
+                audioFile = audioFile,
                 secureStore = SecureApiKeyStore(context, encryptor = encryptor),
                 settingsStore = SettingsStore(context),
                 importedProfileStore = ImportedProfileStore(context),
@@ -244,7 +243,7 @@ class ImeVoiceControllerTest {
         h.controller.cancel()
         assertEquals(ImeVoiceController.State.FINISHED, h.controller.state)
         assertTrue(h.recorder!!.cancelled)
-        assertFalse(h.wavFile.exists())
+        assertFalse(h.audioFile.exists())
         assertNull(h.delivered)
     }
 
@@ -363,7 +362,7 @@ class ImeVoiceControllerTest {
 
         assertEquals(ImeVoiceController.State.FINISHED, h.controller.state)
         assertNull(h.delivered)
-        assertFalse(h.wavFile.exists())
+        assertFalse(h.audioFile.exists())
     }
 
     // ------------------------------------------------------------ integration
@@ -412,14 +411,14 @@ class ImeVoiceControllerTest {
     }
 
     @Test
-    fun `retry reuses the same recorded wav`() {
+    fun `retry reuses the same recording`() {
         val h = harness()
         h.nextError = TranscriptionException.Network(IOException("boom"))
         h.controller.start()
         h.recorder!!.fireEndOfSpeech()
         h.nextError = null
         h.controller.retry()
-        assertEquals(h.wavFile.absolutePath, h.usedFile!!.absolutePath)
+        assertEquals(h.audioFile.absolutePath, h.usedFile!!.absolutePath)
     }
 
     // ------------------------------------------------------- short taps
@@ -433,7 +432,7 @@ class ImeVoiceControllerTest {
         h.controller.submit()
         assertNull(h.delivered)
         assertTrue(h.errors.isEmpty())
-        assertFalse(h.wavFile.exists())
+        assertFalse(h.audioFile.exists())
         // Back to listening automatically (no dead-end error UI).
         assertEquals(ImeVoiceController.State.LISTENING, h.controller.state)
         assertTrue(h.recorder!!.started)
@@ -451,7 +450,7 @@ class ImeVoiceControllerTest {
     // ------------------------------------------------------- no words
 
     @Test
-    fun `empty transcript maps to NO_WORDS and deletes the wav`() {
+    fun `empty transcript maps to NO_WORDS and deletes the recording`() {
         val h = harness()
         h.nextTranscription = { "   " }
         h.controller.start()
@@ -459,7 +458,7 @@ class ImeVoiceControllerTest {
         assertEquals(ImeVoiceController.ImeError.NO_WORDS, h.errors.lastOrNull())
         assertEquals(ImeVoiceController.State.ERROR, h.controller.state)
         assertNull(h.delivered)
-        assertFalse(h.wavFile.exists())
+        assertFalse(h.audioFile.exists())
     }
 
     @Test

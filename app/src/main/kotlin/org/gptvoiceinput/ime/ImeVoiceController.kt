@@ -6,7 +6,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.gptvoiceinput.audio.AudioLevelStats
 import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.audio.SessionRecorder
 import org.gptvoiceinput.config.AppConfig
@@ -29,7 +28,7 @@ import java.io.File
 class ImeVoiceController(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val wavFile: File,
+    private val audioFile: File,
     private val secureStore: SecureApiKeyStore,
     private val settingsStore: SettingsStore,
     private val importedProfileStore: ImportedProfileStore,
@@ -72,7 +71,7 @@ class ImeVoiceController(
 
     private var recorder: SessionRecorder? = null
     private var transcribeJob: Job? = null
-    private var wavReady = false
+    private var audioReady = false
     @Volatile
     private var lastElapsedMs = 0L
     @Volatile
@@ -102,12 +101,12 @@ class ImeVoiceController(
             setState(State.ERROR, ImeError.NO_API_KEY)
             return
         }
-        wavFile.delete()
-        wavReady = false
+        audioFile.delete()
+        audioReady = false
         lastElapsedMs = 0L
         sessionGeneration++
         setState(State.LISTENING)
-        val recorder = recorderFactory(wavFile, settingsStore.autoStopMs, recorderListener)
+        val recorder = recorderFactory(audioFile, settingsStore.autoStopMs, recorderListener)
         this.recorder = recorder
         if (!recorder.start()) {
             // onRecordingError already fired through the listener.
@@ -137,15 +136,15 @@ class ImeVoiceController(
         recorder?.cancelAndAbort()
         recorder = null
         transcribeJob?.cancel()
-        wavFile.delete()
-        wavReady = false
+        audioFile.delete()
+        audioReady = false
         lastError = null
         setState(State.FINISHED)
     }
 
     fun retry() {
         if (state != State.ERROR) return
-        if (!wavReady || !wavFile.exists()) {
+        if (!audioReady || !audioFile.exists()) {
             setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
@@ -163,28 +162,28 @@ class ImeVoiceController(
             setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
+        val stats = recorder?.levelStats
         recorder = null
-        wavReady = true
+        audioReady = true
 
         // Accidental tap (no speech yet): discard the capture silently and
         // go back to listening instead of transcribing silence/noise.
         if (lastElapsedMs in 1 until MIN_RECORDING_MS) {
             Log.i(TAG, "record: ${lastElapsedMs}ms < ${MIN_RECORDING_MS}ms; discarding (accidental tap)")
-            wavFile.delete()
-            wavReady = false
+            audioFile.delete()
+            audioReady = false
             state = State.IDLE
             start()
             return
         }
 
         // Privacy-safe level diagnostics: numbers only, never audio content.
-        val stats = AudioLevelStats.fromWav(wavFile)
         Log.i(
             TAG,
             "record: source=ime peakDb=${stats?.peakDb ?: "n/a"} rmsDb=${stats?.rmsDb ?: "n/a"}",
         )
 
-        if (!wavFile.exists() || wavFile.length() == 0L) {
+        if (!audioFile.exists() || audioFile.length() == 0L) {
             setState(State.ERROR, ImeError.RECORDING_FAILED)
             return
         }
@@ -200,18 +199,18 @@ class ImeVoiceController(
         val generation = sessionGeneration
         transcribeJob = scope.launch {
             try {
-                val transcript = transcriberFactory(key).invoke(wavFile, profile)
+                val transcript = transcriberFactory(key).invoke(audioFile, profile)
                 if (generation != sessionGeneration) return@launch
                 if (!hasMeaningfulText(transcript)) {
                     Log.i(TAG, "transcribe: no meaningful words; NO_WORDS")
-                    wavFile.delete()
-                    wavReady = false
+                    audioFile.delete()
+                    audioReady = false
                     setState(State.ERROR, ImeError.NO_WORDS)
                     return@launch
                 }
                 Log.i(TAG, "transcribe: ok; delivering to InputConnection")
-                wavFile.delete()
-                wavReady = false
+                audioFile.delete()
+                audioReady = false
                 callbacks.onTranscript(transcript)
                 // The IME auto-returns to the previous keyboard after a
                 // commit and may not get onFinishInputView; never leave the
@@ -234,8 +233,8 @@ class ImeVoiceController(
         sessionGeneration++
         recorder?.cancelAndAbort()
         recorder = null
-        wavFile.delete()
-        wavReady = false
+        audioFile.delete()
+        audioReady = false
         lastError = null
         setState(State.FINISHED)
     }
@@ -294,7 +293,7 @@ class ImeVoiceController(
             return ImeVoiceController(
                 context = context,
                 scope = scope,
-                wavFile = File(context.cacheDir, "current_recording.wav"),
+                audioFile = File(context.cacheDir, "current_recording.ogg"),
                 secureStore = secureStore,
                 settingsStore = settingsStore,
                 importedProfileStore = importedProfileStore,

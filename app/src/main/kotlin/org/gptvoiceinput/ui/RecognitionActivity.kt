@@ -27,7 +27,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.gptvoiceinput.R
-import org.gptvoiceinput.audio.AudioLevelStats
 import org.gptvoiceinput.audio.AudioRecorder
 import org.gptvoiceinput.config.AppConfig
 import org.gptvoiceinput.config.ImportedProfileStore
@@ -73,7 +72,7 @@ class RecognitionActivity : AppCompatActivity() {
     private var phase: Phase = Phase.NO_KEY
     private var recorder: AudioRecorder? = null
     private var transcribeJob: Job? = null
-    private var wavReady = false
+    private var audioReady = false
 
     /** Incoming result-delivery route (activity result vs PendingIntent). */
     private var pendingIntent: PendingIntent? = null
@@ -87,7 +86,7 @@ class RecognitionActivity : AppCompatActivity() {
     @Volatile
     private var lastElapsedMs = 0L
 
-    private val tempWav: File
+    private val tempAudio: File
         get() = File(cacheDir, TEMP_RECORDING_NAME)
 
     private val recorderListener = object : AudioRecorder.Listener {
@@ -166,7 +165,7 @@ class RecognitionActivity : AppCompatActivity() {
         })
 
         // Secondary safeguard: remove stale recordings from a crashed session.
-        tempWav.delete()
+        tempAudio.delete()
 
         applyPanelMetrics()
         decideNext()
@@ -243,7 +242,7 @@ class RecognitionActivity : AppCompatActivity() {
         recorder?.cancelAndAbort()
         recorder = null
         transcribeJob?.cancel()
-        if (phase != Phase.DONE) tempWav.delete()
+        if (phase != Phase.DONE) tempAudio.delete()
         if (sessionOwner === this) sessionOwner = null
         super.onDestroy()
     }
@@ -331,8 +330,8 @@ class RecognitionActivity : AppCompatActivity() {
 
     private fun startListening(force: Boolean = false) {
         if (!force && (phase == Phase.PROCESSING || phase == Phase.DONE)) return
-        tempWav.delete()
-        wavReady = false
+        tempAudio.delete()
+        audioReady = false
         lastMeterUiMs = 0L
         lastElapsedMs = 0L
         setPhase(Phase.LISTENING)
@@ -340,7 +339,7 @@ class RecognitionActivity : AppCompatActivity() {
         val endpointMs = settingsStore.autoStopMs // 0 = off
         recorder = AudioRecorder(
             context = this,
-            wavFile = tempWav,
+            audioFile = tempAudio,
             endpointDelayMs = endpointMs,
             listener = recorderListener,
         )
@@ -362,28 +361,28 @@ class RecognitionActivity : AppCompatActivity() {
             showRecordingError(getString(R.string.rec_error_save))
             return
         }
+        val stats = recorder?.levelStats
         recorder = null
-        wavReady = true
+        audioReady = true
 
         // Accidental tap (no speech yet): discard the capture silently and
         // go back to listening instead of transcribing silence/noise.
         if (lastElapsedMs in 1 until MIN_RECORDING_MS) {
             Log.i(TAG, "record: ${lastElapsedMs}ms < ${MIN_RECORDING_MS}ms; discarding (accidental tap)")
-            tempWav.delete()
-            wavReady = false
+            tempAudio.delete()
+            audioReady = false
             startListening(force = true)
             return
         }
 
         // Privacy-safe level diagnostics: numbers only, never audio content.
         // Confirms whether the captured signal is too quiet for transcription.
-        val stats = AudioLevelStats.fromWav(tempWav)
         Log.i(
             TAG,
             "record: source=$source peakDb=${stats?.peakDb ?: "n/a"} rmsDb=${stats?.rmsDb ?: "n/a"}",
         )
 
-        if (!tempWav.exists() || tempWav.length() == 0L) {
+        if (!tempAudio.exists() || tempAudio.length() == 0L) {
             showRecordingError(getString(R.string.rec_error_no_audio))
             return
         }
@@ -406,11 +405,11 @@ class RecognitionActivity : AppCompatActivity() {
                     settingsStore.customTerms(),
                 )
                 val transcriber = OpenAITranscriber(key)
-                val transcript = transcriber.transcribe(tempWav, profile)
+                val transcript = transcriber.transcribe(tempAudio, profile)
                 if (!ImeVoiceController.hasMeaningfulText(transcript)) {
                     Log.i(TAG, "transcribe: no meaningful words; NO_WORDS")
-                    tempWav.delete()
-                    wavReady = false
+                    tempAudio.delete()
+                    audioReady = false
                     showNoWords()
                     return@launch
                 }
@@ -427,7 +426,7 @@ class RecognitionActivity : AppCompatActivity() {
 
     private fun retry() {
         if (phase != Phase.ERROR) return
-        if (!wavReady || !tempWav.exists()) {
+        if (!audioReady || !tempAudio.exists()) {
             // Nothing usable to re-transcribe (e.g. no-words result): record
             // again instead of showing a dead-end error.
             startListening(force = true)
@@ -439,8 +438,8 @@ class RecognitionActivity : AppCompatActivity() {
 
     internal fun deliverResult(transcript: String) {
         phase = Phase.DONE
-        tempWav.delete()
-        wavReady = false
+        tempAudio.delete()
+        audioReady = false
 
         Log.i(TAG, "deliver: transcription ok; result payload created")
         val result = Intent()
@@ -497,7 +496,7 @@ class RecognitionActivity : AppCompatActivity() {
         recorder = null
         transcribeJob?.cancel()
         phase = Phase.DONE
-        tempWav.delete()
+        tempAudio.delete()
         finishSession(RESULT_CANCELED, null)
     }
 
@@ -506,7 +505,7 @@ class RecognitionActivity : AppCompatActivity() {
         recorder?.cancelAndAbort()
         recorder = null
         phase = Phase.DONE
-        tempWav.delete()
+        tempAudio.delete()
         finishSession(RESULT_CANCELED, null)
     }
 
@@ -559,7 +558,7 @@ class RecognitionActivity : AppCompatActivity() {
             openSettingsErrorButton.visibility = View.VISIBLE
         } else {
             hintText.text = errorText(error)
-            retryButton.visibility = if (wavReady && tempWav.exists()) View.VISIBLE else View.GONE
+            retryButton.visibility = if (audioReady && tempAudio.exists()) View.VISIBLE else View.GONE
             openSettingsErrorButton.visibility = View.GONE
         }
         errorButtons.visibility = View.VISIBLE
@@ -650,7 +649,7 @@ class RecognitionActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "RecognitionActivity"
-        private const val TEMP_RECORDING_NAME = "current_recording.wav"
+        private const val TEMP_RECORDING_NAME = "current_recording.ogg"
         private const val REQUEST_MIC_PERMISSION = 1001
 
         /**

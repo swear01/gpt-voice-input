@@ -24,6 +24,9 @@ interface SessionRecorder {
     fun start(): Boolean
     fun stopAndFinalize()
     fun cancelAndAbort()
+
+    /** Peak/RMS of the finished capture, for privacy-safe diagnostics. */
+    val levelStats: AudioLevelStats.Stats? get() = null
 }
 
 /**
@@ -31,7 +34,7 @@ interface SessionRecorder {
  *
  * Split pipeline:
  * ```
- * AudioRecord → raw PCM → WavWriter (upload path, zero processing)
+ * AudioRecord → raw PCM → OpusOggWriter (upload path, 32 kbps Opus)
  *                     └→ frame copy → downsample → VoiceActivityDetector → EndpointDetector
  * ```
  *
@@ -39,7 +42,7 @@ interface SessionRecorder {
  *   AGC on most devices); raw `UNPROCESSED` as fallback.
  * - Noise reduction: Android's built-in [NoiseSuppressor] is attached to the
  *   recording session when the device supports it (`isAvailable()`), so the
- *   captured signal — and therefore the uploaded WAV — is denoised before it
+ *   captured signal — and therefore the uploaded audio — is denoised before it
  *   reaches the transcription API. On devices where the HAL already applies
  *   noise suppression for VOICE_RECOGNITION, `create()` returns null and the
  *   platform processing stands.
@@ -50,12 +53,13 @@ interface SessionRecorder {
  */
 class AudioRecorder(
     private val context: Context,
-    private val wavFile: File,
+    private val audioFile: File,
     private val endpointDelayMs: Int,
     private val listener: Listener,
     private val noSpeechTimeoutMs: Int = EndpointDetector.DEFAULT_NO_SPEECH_TIMEOUT_MS,
     private val maxDurationMs: Int = EndpointDetector.DEFAULT_MAX_DURATION_MS,
     private val vadFactory: () -> VoiceActivityDetector = { WebRtcVoiceActivityDetector() },
+    private val sinkFactory: (File, Int) -> PcmSink = ::OpusOggWriter,
 ) : SessionRecorder {
 
     interface Listener {
@@ -72,7 +76,8 @@ class AudioRecorder(
 
     private var thread: Thread? = null
     private var record: AudioRecord? = null
-    private var wavWriter: WavWriter? = null
+    private var sink: PcmSink? = null
+    private val levels = AudioLevelStats.Accumulator()
     private var vad: VoiceActivityDetector? = null
     private var endpoint: EndpointDetector? = null
     private var levelEstimator: MicLevelEstimator? = null
@@ -118,11 +123,11 @@ class AudioRecorder(
             record = chosen.record
             usedSource = chosen.source
 
-            wavWriter = WavWriter(wavFile, chosen.record.sampleRate)
+            sink = sinkFactory(audioFile, chosen.record.sampleRate)
             levelEstimator = MicLevelEstimator()
 
             // Built-in noise reduction: attach to this recording session so
-            // the captured signal (and the uploaded WAV) is denoised. Must be
+            // the captured signal (and the uploaded audio) is denoised. Must be
             // created before startRecording().
             noiseSuppressor = attachNoiseSuppressor(chosen.record)
             endpoint = EndpointDetector(
@@ -155,19 +160,24 @@ class AudioRecorder(
         }
     }
 
-    /** Stops capture, joins the reader thread, and finalizes a valid WAV. */
+    override val levelStats: AudioLevelStats.Stats get() = levels.stats()
+
+    /** Stops capture, joins the reader thread, and finalizes the upload file. */
     override fun stopAndFinalize() {
         stopLoop()
         thread?.join(JOIN_TIMEOUT_MS)
-        wavWriter?.finish()
-        release()
+        try {
+            sink?.finish()
+        } finally {
+            sink = null
+            release()
+        }
     }
 
-    /** Stops capture without producing a usable WAV (caller deletes the file). */
+    /** Stops capture without producing a usable file (caller deletes it). */
     override fun cancelAndAbort() {
         stopLoop()
         thread?.join(JOIN_TIMEOUT_MS)
-        wavWriter?.abort()
         release()
     }
 
@@ -194,7 +204,8 @@ class AudioRecorder(
             filled += n
             if (filled == frameSamples) {
                 val elapsed = SystemClock.elapsedRealtime() - startRealtimeMs
-                wavWriter?.appendPcm(frame, frameSamples)
+                sink?.appendPcm(frame, frameSamples)
+                levels.add(frame, frameSamples)
                 // Hand the analysis pipeline a frame copy — the uploaded PCM
                 // never passes through analysis processing.
                 val analysisFrame = AudioFrame(
@@ -320,7 +331,8 @@ class AudioRecorder(
         record = null
         runCatching { noiseSuppressor?.release() }
         noiseSuppressor = null
-        wavWriter = null
+        sink?.abort()
+        sink = null
         vad?.close()
         vad = null
         endpoint = null
@@ -337,7 +349,8 @@ class AudioRecorder(
         private const val FRAME_MS = 20
         private const val JOIN_TIMEOUT_MS = 2_000L
 
-        private val SAMPLE_RATE_CANDIDATES = intArrayOf(48_000, 44_100, 16_000, 8_000)
+        /** Opus-native rates only (no 44.1 kHz): the encoder takes PCM as captured. */
+        private val SAMPLE_RATE_CANDIDATES = intArrayOf(48_000, 16_000, 8_000)
 
         fun sourceName(source: Int): String = when (source) {
             MediaRecorder.AudioSource.UNPROCESSED -> "UNPROCESSED"

@@ -38,7 +38,7 @@ IME product:
 - `InputMethodService.switchToPreviousInputMethod()` (public since API 28)
   returns to the previously used IME after commit/cancel — the "goes back to
   SwiftKey" UX.
-- All existing components are reused as-is: `AudioRecorder` (raw WAV +
+- All existing components are reused as-is: `AudioRecorder` (Ogg/Opus upload +
   analysis/VAD/meter), `MicLevelEstimator`, `VoiceActivityDetector`
   (WebRTC VAD GMM, energy fallback), `EndpointDetector`, `OpenAITranscriber`,
   `AppConfig`, `SettingsStore`, `ImportedProfileStore`, `SettingsBackup`,
